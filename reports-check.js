@@ -32,9 +32,17 @@ $(document).ready(function() {
     return null
   }
 
+  var HIGH_TASKS_SUBJECTS = ['English', 'Mathematics']
+
   function getMinTasks(subjectName, activityName) {
     var yr = detectYearLevel(subjectName, activityName)
     if (yr !== 7 && yr !== 8) return 3
+    // English and Mathematics Yr 7 & 8 require 4 tasks
+    var isHighTask = HIGH_TASKS_SUBJECTS.some(function(s) {
+      return subjectName.toLowerCase().includes(s.toLowerCase())
+    })
+    if (isHighTask) return 4
+    // Other core subjects require 3 tasks
     var isCore = CORE_SUBJECTS.some(function(core) {
       return subjectName.toLowerCase().includes(core.toLowerCase())
     })
@@ -545,9 +553,10 @@ $(document).ready(function() {
 
   // Rule note
   $('<div>').addClass('rc-rule-note').html(
-    '📋 <strong>Task minimums:</strong> Yr 7/8 core subjects (English, Mathematics, Humanities, Science, Physical Education) = min <strong>3</strong> tasks. ' +
-    'Yr 7/8 other subjects = min <strong>2</strong> tasks. Yr 9+ = min <strong>3</strong> tasks. ' +
-    '&nbsp;|&nbsp; ⚠️ Tasks must be assigned to <strong>Classes</strong>, not Subjects.'
+    '📋 <strong>Task minimums:</strong> Yr 7/8 English &amp; Mathematics = min <strong>4</strong> tasks. ' +
+    'Yr 7/8 other core subjects (Humanities, Science, Physical Education) = min <strong>3</strong> tasks. ' +
+    'Yr 7/8 non-core subjects = min <strong>2</strong> tasks. Yr 9+ = min <strong>3</strong> tasks. ' +
+    '&nbsp;|&nbsp; ⚠️ Tasks must be assigned to <strong>Subjects</strong>, not Classes.'
   ).appendTo(body)
 
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
@@ -807,7 +816,7 @@ $(document).ready(function() {
 
           // Class vs Subject check
           if (t.activityType && t.activityType !== 1) {
-            setupErr(`Task ${katCount} '${t.name}': assigned to a Subject not a Class — open the Learning Task and reassign to the specific class`)
+            setupErr(`Task ${katCount} '${t.name}': assigned to a Class not a Subject — open the Learning Task and reassign to the Subject`)
           }
           // Reporting cycle linked
           if (!t.semesterReportCycles || !t.semesterReportCycles.length) {
@@ -858,9 +867,17 @@ $(document).ready(function() {
         var minTasks = getMinTasks(subjectName, actName)
         var yr       = detectYearLevel(subjectName, actName)
         if (katCount < minTasks) {
-          var ctx = (yr === 7 || yr === 8)
-            ? `Year ${yr} non-core subject — minimum is ${minTasks} tasks`
-            : `minimum is ${minTasks} tasks`
+          var isHighTask = HIGH_TASKS_SUBJECTS.some(function(s) {
+            return subjectName.toLowerCase().includes(s.toLowerCase())
+          })
+          var ctx
+          if (isHighTask && (yr === 7 || yr === 8)) {
+            ctx = `Year ${yr} English/Mathematics — minimum is ${minTasks} tasks`
+          } else if (yr === 7 || yr === 8) {
+            ctx = `Year ${yr} non-core subject — minimum is ${minTasks} tasks`
+          } else {
+            ctx = `minimum is ${minTasks} tasks`
+          }
           setupGroup.add(
             `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${ctx}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
             'warning'
