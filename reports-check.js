@@ -10,20 +10,26 @@ $(document).ready(function() {
     $('body #dash').remove()
   }
 
+  // ── AEU state (shared across all checks) ─────────────────────────────────
+  var aeuActive = false
+  var AEU_EXEMPT_FIELDS = ['teacher comments', 'areas for improvement']
+
+  function isAeuExempt(fieldName) {
+    if (!aeuActive) return false
+    return AEU_EXEMPT_FIELDS.some(function(f) {
+      return fieldName.toLowerCase().includes(f)
+    })
+  }
+
   // ── Year level & minimum task logic ──────────────────────────────────────
-  // Detects Year 7 or 8 from EITHER subject name OR activity/class name
-  // Subject name: "Year 7 Multimedia", "Year 8 Art"
-  // Activity name: "7MMEA", "8ART", "7A-ENG"
   var CORE_SUBJECTS = ['English', 'Mathematics', 'Humanities', 'Science', 'Physical Education']
 
   function detectYearLevel(subjectName, activityName) {
-    // From subject name: "Year 7 ..." or "Year 8 ..."
     var subjectMatch = subjectName.match(/^Year\s+([78])\b/i)
     if (subjectMatch) return parseInt(subjectMatch[1])
-    // From activity name: starts with 7 or 8 followed by a letter
     var activityMatch = activityName.match(/^([78])[A-Z]/i)
     if (activityMatch) return parseInt(activityMatch[1])
-    return null // not Year 7 or 8
+    return null
   }
 
   function getMinTasks(subjectName, activityName) {
@@ -37,7 +43,7 @@ $(document).ready(function() {
 
   // ── Styles ────────────────────────────────────────────────────────────────
   $(`<div id="dash"><style>
-    #dash * { box-sizing: border-box; }
+    #dash * { box-sizing: border-box; margin: 0; padding: 0; }
     #dash {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -48,13 +54,14 @@ $(document).ready(function() {
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      color: #1a1d23;
     }
 
     /* ── Top bar ── */
     #dash .rc-topbar {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       padding: 0 20px;
       height: 52px;
       background: white;
@@ -66,10 +73,9 @@ $(document).ready(function() {
       font-size: 15px;
       font-weight: 600;
       color: #1a1d23;
-      margin: 0;
       white-space: nowrap;
     }
-    #dash .rc-topbar-divider {
+    #dash .rc-divider {
       width: 1px; height: 18px;
       background: #e2e5ea;
       flex-shrink: 0;
@@ -87,11 +93,41 @@ $(document).ready(function() {
       min-width: 180px;
     }
     #dash .rc-cycle-select:focus { outline: none; border-color: #0057d9; }
+
+    /* AEU checkbox */
+    #dash .rc-aeu {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 500;
+      color: #92400e;
+      transition: background 0.15s;
+    }
+    #dash .rc-aeu:hover { background: #fde68a; }
+    #dash .rc-aeu.active {
+      background: #d97706;
+      border-color: #b45309;
+      color: white;
+    }
+    #dash .rc-aeu input[type=checkbox] {
+      width: 14px; height: 14px;
+      accent-color: #d97706;
+      cursor: pointer;
+    }
+
     #dash .rc-spacer { flex: 1; }
     #dash .rc-topbar-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       padding: 5px 12px;
       border-radius: 6px;
       font-size: 12px;
@@ -104,18 +140,10 @@ $(document).ready(function() {
       transition: background 0.12s;
     }
     #dash .rc-topbar-btn:hover { background: #f3f4f6; }
-    #dash .rc-topbar-btn.danger {
-      background: #0057d9;
-      color: white;
-      border-color: #0057d9;
-    }
-    #dash .rc-topbar-btn.danger:hover { background: #004ab5; }
-    #dash .rc-topbar-btn.close {
-      background: #1a1d23;
-      color: white;
-      border-color: #1a1d23;
-    }
-    #dash .rc-topbar-btn.close:hover { background: #374151; }
+    #dash .rc-topbar-btn.primary { background: #0057d9; color: white; border-color: #0057d9; }
+    #dash .rc-topbar-btn.primary:hover { background: #004ab5; }
+    #dash .rc-topbar-btn.close-btn { background: #1a1d23; color: white; border-color: #1a1d23; }
+    #dash .rc-topbar-btn.close-btn:hover { background: #374151; }
 
     /* ── Scrollable body ── */
     #dash .rc-body {
@@ -124,11 +152,11 @@ $(document).ready(function() {
       padding: 16px 20px 40px;
     }
 
-    /* ── Stat bar ── */
+    /* ── Stats bar ── */
     #dash .rc-stats {
       display: flex;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px;
+      margin-bottom: 12px;
       flex-wrap: wrap;
     }
     #dash .rc-stat {
@@ -138,36 +166,45 @@ $(document).ready(function() {
       background: white;
       border: 1px solid #e2e5ea;
       border-radius: 8px;
-      padding: 8px 14px;
+      padding: 7px 13px;
       font-size: 12px;
       font-weight: 500;
       color: #6b7280;
     }
-    #dash .rc-stat .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    #dash .rc-stat strong {
-      font-size: 16px;
-      font-weight: 700;
-      color: #1a1d23;
-    }
+    #dash .rc-stat strong { font-size: 15px; font-weight: 700; color: #1a1d23; }
+    #dash .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     #dash .dot-green  { background: #16a34a; }
     #dash .dot-amber  { background: #d97706; }
     #dash .dot-red    { background: #dc2626; }
     #dash .dot-blue   { background: #0057d9; }
 
+    /* ── All-clear banner ── */
+    #dash .rc-allclear {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-left: 4px solid #16a34a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #15803d;
+      line-height: 1.6;
+    }
+    #dash .rc-allclear strong { font-weight: 600; display: block; margin-bottom: 2px; }
+
     /* ── Rule note ── */
     #dash .rc-rule-note {
       font-size: 11.5px;
-      color: #6b7280;
+      color: #374151;
       background: #e8f0fe;
       border: 1px solid #c7d9fb;
       border-radius: 6px;
       padding: 7px 12px;
-      margin-bottom: 14px;
-      line-height: 1.5;
+      margin-bottom: 12px;
+      line-height: 1.6;
     }
 
     /* ── Staff block ── */
@@ -183,26 +220,21 @@ $(document).ready(function() {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 11px 14px;
+      padding: 10px 14px;
       background: #fafbfc;
       border-bottom: 1px solid #e2e5ea;
       cursor: pointer;
       user-select: none;
     }
     #dash .rc-staff-header:hover { background: #f3f4f6; }
-    #dash .rc-staff-chevron {
-      font-size: 10px;
+    #dash .rc-chevron {
+      font-size: 9px;
       color: #9ca3af;
       transition: transform 0.15s;
       flex-shrink: 0;
     }
-    #dash .rc-staff-block.open .rc-staff-chevron { transform: rotate(90deg); }
-    #dash .rc-staff-name {
-      font-weight: 600;
-      font-size: 13px;
-      color: #1a1d23;
-      flex: 1;
-    }
+    #dash .rc-staff-block.open .rc-staff-header .rc-chevron { transform: rotate(90deg); }
+    #dash .rc-staff-name { font-weight: 600; font-size: 13px; flex: 1; }
     #dash .rc-staff-pill {
       font-size: 11px;
       font-weight: 600;
@@ -224,26 +256,14 @@ $(document).ready(function() {
       color: #0057d9;
       cursor: pointer;
       white-space: nowrap;
-      flex-shrink: 0;
     }
     #dash .rc-email-btn:hover { background: #d1e3fc; }
     #dash .rc-staff-body { display: none; }
     #dash .rc-staff-block.open .rc-staff-body { display: block; }
+    #dash .rc-progress-bar { height: 2px; background: #f0f2f5; }
+    #dash .rc-progress-fill { height: 100%; background: #0057d9; width: 0%; transition: width 0.3s ease; }
 
-    /* ── Progress bar ── */
-    #dash .rc-progress-bar {
-      height: 2px;
-      background: #f0f2f5;
-      overflow: hidden;
-    }
-    #dash .rc-progress-fill {
-      height: 100%;
-      background: #0057d9;
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    /* ── Activity rows ── */
+    /* ── Activity row ── */
     #dash .rc-activity {
       border-bottom: 1px solid #f3f4f6;
     }
@@ -252,26 +272,25 @@ $(document).ready(function() {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 14px 8px 28px;
+      padding: 8px 14px 8px 26px;
       cursor: pointer;
       transition: background 0.1s;
     }
     #dash .rc-activity-header:hover { background: #f9fafb; }
-    #dash .rc-activity-status {
-      width: 6px; height: 6px;
+    #dash .rc-act-status-dot {
+      width: 7px; height: 7px;
       border-radius: 50%;
       flex-shrink: 0;
     }
-    #dash .rc-activity-name {
+    #dash .rc-act-name {
       flex: 1;
       font-size: 12.5px;
     }
-    #dash .rc-activity-name a {
-      color: #0057d9;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    #dash .rc-activity-name a:hover { text-decoration: underline; }
+    #dash .rc-act-name a { color: #0057d9; text-decoration: none; font-weight: 500; }
+    #dash .rc-act-name a:hover { text-decoration: underline; }
+    #dash .rc-act-name .rc-act-subject { color: #9ca3af; font-weight: 400; }
+
+    /* KAT pills row */
     #dash .rc-kats {
       display: flex;
       gap: 4px;
@@ -289,21 +308,27 @@ $(document).ready(function() {
     }
     #dash .rc-kat.warning { background: #fef3c7; color: #92400e; }
     #dash .rc-kat.error   { background: #fee2e2; color: #991b1b; }
-    #dash .rc-element-pill {
+    #dash .rc-elem-pill {
       font-size: 10.5px;
       font-weight: 600;
       padding: 2px 8px;
       border-radius: 20px;
       white-space: nowrap;
     }
-    #dash .rc-element-pill.complete { background: #dcfce7; color: #15803d; }
-    #dash .rc-element-pill.error    { background: #fee2e2; color: #991b1b; }
-    #dash .rc-activity-body { display: none; }
+    #dash .rc-elem-pill.complete { background: #dcfce7; color: #15803d; }
+    #dash .rc-elem-pill.error    { background: #fee2e2; color: #991b1b; }
+
+    #dash .rc-activity-body { display: none; padding: 0 14px 12px 26px; }
     #dash .rc-activity.open .rc-activity-body { display: block; }
 
-    /* ── Issue list ── */
+    /* ── Issue groups ── */
+    #dash .rc-issue-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
     #dash .rc-issue-group {
-      margin: 0 14px 10px 28px;
       border: 1px solid #e2e5ea;
       border-radius: 8px;
       overflow: hidden;
@@ -313,12 +338,37 @@ $(document).ready(function() {
       align-items: center;
       justify-content: space-between;
       padding: 7px 12px;
-      background: #fffbeb;
-      border-bottom: 1px solid #fde68a;
+      cursor: pointer;
+      user-select: none;
       font-size: 12px;
       font-weight: 600;
-      color: #92400e;
     }
+    #dash .rc-issue-group.group-setup .rc-issue-group-header {
+      background: #eff6ff;
+      border-bottom: 1px solid #bfdbfe;
+      color: #1d40ae;
+    }
+    #dash .rc-issue-group.group-results .rc-issue-group-header {
+      background: #fff7ed;
+      border-bottom: 1px solid #fed7aa;
+      color: #9a3412;
+    }
+    #dash .rc-issue-group.group-ok .rc-issue-group-header {
+      background: #f0fdf4;
+      border-bottom: 1px solid #bbf7d0;
+      color: #15803d;
+    }
+    #dash .rc-group-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+    }
+    #dash .group-setup .rc-group-badge   { background: #dbeafe; color: #1d40ae; }
+    #dash .group-results .rc-group-badge { background: #fed7aa; color: #9a3412; }
+    #dash .group-ok .rc-group-badge      { background: #dcfce7; color: #15803d; }
+    #dash .rc-issue-group-body { display: none; }
+    #dash .rc-issue-group.open .rc-issue-group-body { display: block; }
     #dash .rc-issue-item {
       display: flex;
       align-items: flex-start;
@@ -330,19 +380,25 @@ $(document).ready(function() {
       line-height: 1.5;
     }
     #dash .rc-issue-item:last-child { border-bottom: none; }
-    #dash .rc-issue-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      margin-top: 5px;
+    #dash .rc-issue-sev {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
       flex-shrink: 0;
+      margin-top: 2px;
+      text-transform: uppercase;
     }
+    #dash .rc-issue-sev.error   { background: #fee2e2; color: #991b1b; }
+    #dash .rc-issue-sev.warning { background: #fef3c7; color: #92400e; }
+    #dash .rc-issue-sev.info    { background: #f3f4f6; color: #6b7280; }
 
-    /* ── Excend section ── */
+    /* ── Excend ── */
     #dash .rc-excend {
-      margin: 0 14px 10px 28px;
-      border: 1px solid #e2e5ea;
+      border: 1px solid #bbf7d0;
       border-radius: 8px;
       overflow: hidden;
+      margin-top: 8px;
     }
     #dash .rc-excend-header {
       display: flex;
@@ -350,7 +406,6 @@ $(document).ready(function() {
       justify-content: space-between;
       padding: 7px 12px;
       background: #f0fdf4;
-      border-bottom: 1px solid #bbf7d0;
       font-size: 12px;
       font-weight: 600;
       color: #15803d;
@@ -363,9 +418,8 @@ $(document).ready(function() {
       align-items: center;
       gap: 8px;
       padding: 5px 12px;
-      border-bottom: 1px solid #f9fafb;
+      border-bottom: 1px solid #f0fdf4;
       font-size: 11.5px;
-      color: #374151;
     }
     #dash .rc-excend-row:last-child { border-bottom: none; }
     #dash .rc-excend-name { width: 28%; font-weight: 500; flex-shrink: 0; }
@@ -375,15 +429,16 @@ $(document).ready(function() {
       font-weight: 600;
       padding: 2px 7px;
       border-radius: 20px;
+      background: #dcfce7;
+      color: #15803d;
     }
-    #dash .rc-excend-award.complete { background: #dcfce7; color: #15803d; }
 
-    /* ── Load all staff button ── */
+    /* ── Load all btn ── */
     #dash .rc-load-all {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      margin: 10px 14px;
+      margin: 10px 0;
       padding: 6px 14px;
       border-radius: 6px;
       font-size: 12px;
@@ -392,24 +447,17 @@ $(document).ready(function() {
       background: #0057d9;
       color: white;
       border: none;
-      transition: background 0.12s;
     }
     #dash .rc-load-all:hover { background: #004ab5; }
-
-    /* ── Empty state ── */
-    #dash .rc-empty {
-      text-align: center;
-      padding: 40px 20px;
-      color: #9ca3af;
-      font-size: 13px;
-    }
 
     @media print {
       body > *:not(#dash) { display: none !important; }
       #dash { position: static !important; overflow: visible !important; height: auto !important; }
-      #dash .rc-topbar .rc-topbar-btn { display: none !important; }
-      #dash .rc-staff-body { display: block !important; }
-      #dash .rc-activity-body { display: block !important; }
+      #dash .rc-topbar-btn { display: none !important; }
+      #dash .rc-staff-body,
+      #dash .rc-activity-body,
+      #dash .rc-issue-group-body,
+      #dash .rc-excend-body { display: block !important; }
     }
   </style></div>`).appendTo('body')
 
@@ -421,13 +469,36 @@ $(document).ready(function() {
     $('#rc-stat-warning strong').text(stats.warning)
     $('#rc-stat-error strong').text(stats.error)
     $('#rc-stat-total strong').text(stats.total)
+    // Show all-clear only when all classes loaded and none have errors/warnings
+    if (stats.total > 0 && stats.complete === stats.total) {
+      $('#rc-allclear').css('display', 'flex')
+    } else {
+      $('#rc-allclear').css('display', 'none')
+    }
   }
 
   // ── Top bar ───────────────────────────────────────────────────────────────
   var topbar = $('<div>').addClass('rc-topbar').appendTo('#dash')
-  $('<h1>').text('Reports Check').appendTo(topbar)
-  $('<div>').addClass('rc-topbar-divider').appendTo(topbar)
+  $('<h1>').text('Reports Check 2.0').appendTo(topbar)
+  $('<div>').addClass('rc-divider').appendTo(topbar)
   var selectCycle = $('<select>').addClass('rc-cycle-select').change(loadCycle).appendTo(topbar)
+  $('<div>').addClass('rc-divider').appendTo(topbar)
+
+  // AEU checkbox
+  var aeuLabel = $('<label>').addClass('rc-aeu').appendTo(topbar)
+  var aeuCheck = $('<input>').attr('type', 'checkbox').appendTo(aeuLabel)
+  aeuLabel.append(' ⚡ AEU Industrial Action')
+  aeuCheck.on('change', function() {
+    aeuActive = this.checked
+    aeuLabel.toggleClass('active', aeuActive)
+    // Re-render all visible activity issues
+    $('.rc-activity').each(function() {
+      var actDiv = $(this)
+      var rerender = actDiv.data('rerender')
+      if (rerender) rerender()
+    })
+  })
+
   $('<div>').addClass('rc-spacer').appendTo(topbar)
 
   if (Compass.organisationUserRoles.ReportsAdmin) {
@@ -437,6 +508,7 @@ $(document).ready(function() {
       if (isExpand) {
         $('.rc-staff-block').addClass('open')
         $('.rc-activity').addClass('open')
+        $('.rc-issue-group').addClass('open')
       } else {
         $('.rc-staff-block').removeClass('open')
         $('.rc-activity').removeClass('open')
@@ -444,11 +516,11 @@ $(document).ready(function() {
     }).appendTo(topbar)
   }
 
-  $('<div>').addClass('rc-topbar-btn danger').html('🖨 Print').click(function() {
+  $('<div>').addClass('rc-topbar-btn primary').html('🖨 Print').click(function() {
     window.print()
   }).appendTo(topbar)
 
-  $('<div>').addClass('rc-topbar-btn close').text('✕ Close').click(function() {
+  $('<div>').addClass('rc-topbar-btn close-btn').text('✕ Close').click(function() {
     window.single = false
     $('#dash').remove()
   }).appendTo(topbar)
@@ -456,21 +528,28 @@ $(document).ready(function() {
   // ── Body ──────────────────────────────────────────────────────────────────
   var body = $('<div>').addClass('rc-body').appendTo('#dash')
 
-  // Stats bar
+  // Stats
   var statsBar = $('<div>').addClass('rc-stats').appendTo(body)
-  statsBar.append('<div class="rc-stat" id="rc-stat-total"><div class="dot dot-blue"></div><strong>0</strong> Classes</div>')
-  statsBar.append('<div class="rc-stat" id="rc-stat-complete"><div class="dot dot-green"></div><strong>0</strong> Complete</div>')
-  statsBar.append('<div class="rc-stat" id="rc-stat-warning"><div class="dot dot-amber"></div><strong>0</strong> Warnings</div>')
-  statsBar.append('<div class="rc-stat" id="rc-stat-error"><div class="dot dot-red"></div><strong>0</strong> Errors</div>')
+  statsBar.append('<div class="rc-stat" id="rc-stat-total"><div class="dot dot-blue"></div><strong>0</strong>&nbsp;Classes</div>')
+  statsBar.append('<div class="rc-stat" id="rc-stat-complete"><div class="dot dot-green"></div><strong>0</strong>&nbsp;Complete</div>')
+  statsBar.append('<div class="rc-stat" id="rc-stat-warning"><div class="dot dot-amber"></div><strong>0</strong>&nbsp;Warnings</div>')
+  statsBar.append('<div class="rc-stat" id="rc-stat-error"><div class="dot dot-red"></div><strong>0</strong>&nbsp;Errors</div>')
+
+  // All-clear banner
+  $('<div>').attr('id', 'rc-allclear').addClass('rc-allclear').html(
+    '<span style="font-size:20px;flex-shrink:0">✅</span>' +
+    '<div><strong>Reports Check 2.0 has no detectable errors.</strong>' +
+    'Please download a report from each class in Compass and check the report looks how it should. ' +
+    'Completed reports still require proofreading before publishing.</div>'
+  ).appendTo(body)
 
   // Rule note
   $('<div>').addClass('rc-rule-note').html(
-    '📋 <strong>Task minimums:</strong> Year 7 & 8 core subjects (English, Mathematics, Humanities, Science, Physical Education) require <strong>3</strong> tasks. ' +
-    'All other Year 7 & 8 subjects require <strong>2</strong> tasks. Year 9 and above require <strong>3</strong> tasks. ' +
-    '⚠️ Learning tasks must be assigned to <strong>Classes</strong>, not Subjects.'
+    '📋 <strong>Task minimums:</strong> Yr 7/8 core subjects (English, Mathematics, Humanities, Science, Physical Education) = min <strong>3</strong> tasks. ' +
+    'Yr 7/8 other subjects = min <strong>2</strong> tasks. Yr 9+ = min <strong>3</strong> tasks. ' +
+    '&nbsp;|&nbsp; ⚠️ Tasks must be assigned to <strong>Classes</strong>, not Subjects.'
   ).appendTo(body)
 
-  // Cycle container
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
 
   getCycles().done(loadCycles)
@@ -517,14 +596,11 @@ $(document).ready(function() {
     $('#rc-cycles .rc-cycle').hide()
     stats = { complete: 0, warning: 0, error: 0, total: 0 }
     updateStats()
-
     if ($(`#rc-cycle-${cycleId}`).length) {
       $(`#rc-cycle-${cycleId}`).show()
     } else {
       var cycle = $('<div>').addClass('rc-cycle').attr('id', `rc-cycle-${cycleId}`).appendTo(cycleContainer)
-      var userId = Compass.organisationUserId
-      renderStaffBlock(cycle, userId, selectCycle.children('option:selected').text(), cycleId)
-
+      renderStaffBlock(cycle, Compass.organisationUserId, selectCycle.children('option:selected').text(), cycleId)
       if (Compass.organisationUserRoles.ReportsAdmin) {
         $('<button>').addClass('rc-load-all').html('👥 Load All Staff').click(function() {
           cycle.empty()
@@ -537,32 +613,23 @@ $(document).ready(function() {
 
   function renderStaffBlock(container, userId, name, cycleId) {
     var block = $('<div>').addClass('rc-staff-block open').appendTo(container)
-
-    // Header
     var hdr = $('<div>').addClass('rc-staff-header').appendTo(block)
-    $('<span>').addClass('rc-staff-chevron').text('▶').appendTo(hdr)
+    $('<span>').addClass('rc-chevron').text('▶').appendTo(hdr)
     $('<div>').addClass('rc-staff-name').text(name).appendTo(hdr)
-    var statusPill = $('<div>').addClass('rc-staff-pill loading').text('Loading…').appendTo(hdr)
-    var progressBar = $('<div>').addClass('rc-progress-bar').appendTo(block)
-    var progressFill = $('<div>').addClass('rc-progress-fill').appendTo(progressBar)
-
-    // Email button (always visible for admins)
+    var pill = $('<div>').addClass('rc-staff-pill loading').text('Loading…').appendTo(hdr)
     if (Compass.organisationUserRoles.ReportsAdmin) {
       $('<div>').addClass('rc-email-btn').text('✉ Email').click(function(e) {
         e.stopPropagation()
-        getUser(userId).done((user) => emailUser(user, userId, cycleId))
+        getUser(userId).done((u) => emailUser(u, cycleId))
       }).appendTo(hdr)
     }
-
     hdr.click(function() { block.toggleClass('open') })
-
+    var pb = $('<div>').addClass('rc-progress-bar').appendTo(block)
+    var pf = $('<div>').addClass('rc-progress-fill').appendTo(pb)
     var staffBody = $('<div>').addClass('rc-staff-body').appendTo(block)
-
     getActivities(cycleId, userId).done(function(data) {
-      loadActivities(data, userId, cycleId, staffBody, statusPill, progressFill)
+      loadActivities(data, userId, cycleId, staffBody, pill, pf)
     })
-
-    return block
   }
 
   // ── Staff ─────────────────────────────────────────────────────────────────
@@ -574,33 +641,24 @@ $(document).ready(function() {
   }
   function loadStaff(users, cycleId, container) {
     users.d.sort(function(a, b) { return a.ln.localeCompare(b.ln) || a.fn.localeCompare(b.fn) })
-    $.each(users.d, function() {
-      renderStaffBlock(container, this.id, this.n, cycleId)
-    })
+    $.each(users.d, function() { renderStaffBlock(container, this.id, this.n, cycleId) })
   }
-
   function getUser(userId) {
     return $.ajax("/Services/User.svc/GetUserDetailsBlobByUserId", {
       data: JSON.stringify({ targetUserId: userId, targetSchoolId: Compass.schoolId, page: 1, start: 0, limit: 25 }),
       contentType: 'application/json', type: 'POST'
     })
   }
-  function emailUser(user, userId, cycleId) {
-    var subject = 'Please check the following reports (or mark Excluded)'
-    var body = []
-    $(`#rc-cycle-${cycleId} .rc-staff-block`).each(function() {
-      // Find by matching data attribute
+  function emailUser(user, cycleId) {
+    var subject = 'Reports Check — please action the following issues'
+    var lines = []
+    $(`#rc-cycle-${cycleId} .rc-issue-item`).each(function() {
+      lines.push($(this).find('div:last').text().trim())
     })
-    // Collect issues from the staff block
-    var issues = []
-    $(`#rc-cycle-${cycleId}`).find('.rc-issue-item').each(function() {
-      issues.push($(this).text().trim())
-    })
-    if (issues.length) {
-      var bodyStr = issues.join('%0a')
-      window.location.href = `mailto:${user.d.userEmail}?subject=${encodeURIComponent(subject)}&body=${bodyStr}`
+    if (lines.length) {
+      window.location.href = `mailto:${user.d.userEmail}?subject=${encodeURIComponent(subject)}&body=${lines.join('%0a')}`
     } else {
-      alert(user.d.userDisplayName + " has no outstanding issues.")
+      alert((user.d.userDisplayName || 'This staff member') + ' has no outstanding issues.')
     }
   }
 
@@ -612,27 +670,24 @@ $(document).ready(function() {
     })
   }
 
-  function loadActivities(data, userId, cycleId, staffBody, statusPill, progressFill) {
-    var total = data.d.length
-    var count = 0
+  function loadActivities(data, userId, cycleId, staffBody, pill, pf) {
+    var filtered = data.d.filter(function(a) {
+      return !(a.subjectName === "Advisory" || a.subjectName === "YDuties" || a.subjectName === "YDBUS")
+    })
+    var total = filtered.length, count = 0
     var hasError = false, hasWarning = false
 
-    var filtered = data.d.filter(function(a) {
-      return !(a.subjectName == "Advisory" || a.subjectName == "YDuties" || a.subjectName == "YDBUS")
-    })
-    total = filtered.length
-
     if (total === 0) {
-      $('<div>').addClass('rc-empty').text('No classes found for this cycle.').appendTo(staffBody)
-      statusPill.removeClass('loading').addClass('complete').text('No classes')
+      $('<div>').css({ padding: '12px 14px', fontSize: '12px', color: '#9ca3af' }).text('No classes found for this cycle.').appendTo(staffBody)
+      pill.removeClass('loading').addClass('complete').text('No classes')
       return
     }
 
     $.each(filtered, function() {
-      var entityId     = this.id
-      var activityId   = this.activityId
-      var subjectName  = this.subjectName
-      var activityName = this.activityName
+      var entityId    = this.id
+      var activityId  = this.activityId
+      var subjectName = this.subjectName
+      var actName     = this.activityName
 
       stats.total++
       updateStats()
@@ -642,82 +697,244 @@ $(document).ready(function() {
         actDiv.toggleClass('open')
       }).appendTo(actDiv)
 
-      var statusDot = $('<div>').addClass('rc-activity-status dot-blue').appendTo(actHdr)
-      $('<div>').addClass('rc-activity-name').html(
-        `<a href="/Organise/Activities/Activity.aspx#activity/${activityId}" target="_blank">${activityName}</a>` +
-        `<span style="color:#9ca3af;font-weight:400;"> — ${subjectName}</span>`
+      var dot = $('<div>').addClass('rc-act-status-dot dot-blue').appendTo(actHdr)
+      $('<div>').addClass('rc-act-name').html(
+        `<a href="/Organise/Activities/Activity.aspx#activity/${activityId}" target="_blank">${actName}</a>` +
+        ` <span class="rc-act-subject">— ${subjectName}</span>`
       ).appendTo(actHdr)
+      var katsDiv  = $('<div>').addClass('rc-kats').appendTo(actHdr)
+      var elemDiv  = $('<div>').appendTo(actHdr)
 
-      var katsDiv    = $('<div>').addClass('rc-kats').appendTo(actHdr)
-      var elemDiv    = $('<div>').appendTo(actHdr)
+      var actBody  = $('<div>').addClass('rc-activity-body').appendTo(actDiv)
+      var issueGrps = $('<div>').addClass('rc-issue-groups').appendTo(actBody)
 
-      var actBody    = $('<div>').addClass('rc-activity-body').appendTo(actDiv)
-      var issueGroup = $('<div>').addClass('rc-issue-group').hide().appendTo(actBody)
-      var issueHdr   = $('<div>').addClass('rc-issue-group-header').appendTo(issueGroup)
-      $('<span>').text('Issues').appendTo(issueHdr)
-      var issueBadge = $('<span>').text('0').appendTo(issueHdr)
-      var issueList  = $('<div>').appendTo(issueGroup)
+      // ── Issue group factory ──
+      function makeGroup(id, type, label) {
+        var grp = $('<div>').addClass(`rc-issue-group group-${type}`).attr('id', id).appendTo(issueGrps)
+        var ghdr = $('<div>').addClass('rc-issue-group-header').click(function() {
+          grp.toggleClass('open')
+        }).appendTo(grp)
+        $('<span>').text(label).appendTo(ghdr)
+        var badge = $('<span>').addClass('rc-group-badge').text('0').appendTo(ghdr)
+        var gbody = $('<div>').addClass('rc-issue-group-body').appendTo(grp)
+        return {
+          grp: grp,
+          badge: badge,
+          body: gbody,
+          count: 0,
+          add: function(text, sev) {
+            this.count++
+            badge.text(this.count)
+            grp.addClass('open')
+            var row = $('<div>').addClass('rc-issue-item').appendTo(gbody)
+            $('<span>').addClass(`rc-issue-sev ${sev}`).text(sev).appendTo(row)
+            $('<div>').text(text).appendTo(row)
+          }
+        }
+      }
 
-      var excend     = $('<div>').addClass('rc-excend').appendTo(actBody)
-      var excHdr     = $('<div>').addClass('rc-excend-header').click(function() {
-        excend.toggleClass('open')
-      }).appendTo(excend)
-      $('<span>').text('Excellence & Endeavour').appendTo(excHdr)
-      $('<span>').text('▶').css({ fontSize: '10px', transition: 'transform 0.15s' }).appendTo(excHdr)
-      var excBody    = $('<div>').addClass('rc-excend-body').appendTo(excend)
+      var setupGroup   = makeGroup(`grp-setup-${entityId}`,   'setup',   'Setup Issues')
+      var resultsGroup = makeGroup(`grp-results-${entityId}`, 'results', 'Task Results Missing')
 
-      function addIssue(text, severity) {
-        issueGroup.show()
-        actDiv.addClass('open')
-        var dotClass = severity === 'error' ? 'dot-red' : severity === 'warning' ? 'dot-amber' : 'dot-blue'
-        var row = $('<div>').addClass('rc-issue-item').appendTo(issueList)
-        $('<div>').addClass('rc-issue-dot ' + dotClass).appendTo(row)
-        $('<div>').text(text).appendTo(row)
-        var n = parseInt(issueBadge.text()) + 1
-        issueBadge.text(n)
-        issueHdr.find('span:first').text(`Issues (${n})`)
-        if (severity === 'error') {
-          statusDot.removeClass('dot-blue dot-amber').addClass('dot-red')
+      // Severity tracker
+      function markSeverity(sev) {
+        if (sev === 'error') {
+          dot.removeClass('dot-blue dot-amber').addClass('dot-red')
           hasError = true
-        } else if (severity === 'warning' && !statusDot.hasClass('dot-red')) {
-          statusDot.removeClass('dot-blue').addClass('dot-amber')
+        } else if (sev === 'warning' && !dot.hasClass('dot-red')) {
+          dot.removeClass('dot-blue').addClass('dot-amber')
           hasWarning = true
         }
       }
 
-      $.when(getReports(entityId, cycleId), getTasks(activityId), getEnrolments(activityId))
-        .done(function(results, tasks, enrolments) {
-          var classlist = loadEnrolments(enrolments[0])
-          loadTasks(tasks[0], cycleId, subjectName, activityName, katsDiv, addIssue)
-          loadReports(results[0], activityId, cycleId, elemDiv, addIssue, excBody)
-        }).done(function() {
-          count++
-          progressFill.css('width', (count / total * 100) + '%')
+      // Stored data for AEU re-render
+      var storedTaskData, storedReportData, storedEnrolments, storedElemDiv, storedExcBody
 
-          // Update activity status dot if no issues
-          if (!statusDot.hasClass('dot-red') && !statusDot.hasClass('dot-amber')) {
-            statusDot.removeClass('dot-blue').addClass('dot-green')
+      function renderIssues() {
+        // Clear groups
+        setupGroup.body.empty(); setupGroup.count = 0; setupGroup.badge.text('0')
+        resultsGroup.body.empty(); resultsGroup.count = 0; resultsGroup.badge.text('0')
+        dot.removeClass('dot-red dot-amber').addClass('dot-blue')
+        katsDiv.empty(); elemDiv.empty()
+
+        if (storedTaskData)   processTaskIssues(storedTaskData, storedEnrolments)
+        if (storedReportData) processReportIssues(storedReportData, storedExcBody)
+
+        // Final dot colour
+        if (!dot.hasClass('dot-red') && !dot.hasClass('dot-amber')) {
+          dot.removeClass('dot-blue').addClass('dot-green')
+        }
+        // Hide empty groups
+        if (setupGroup.count === 0) {
+          setupGroup.grp.hide()
+        } else {
+          setupGroup.grp.show()
+        }
+        if (resultsGroup.count === 0) {
+          resultsGroup.grp.hide()
+        } else {
+          resultsGroup.grp.show()
+        }
+      }
+
+      actDiv.data('rerender', renderIssues)
+
+      // ── Task processing ──
+      function processTaskIssues(tasks, classlist) {
+        var katCount = 0
+        $.each(tasks.d.data, function() {
+          var t = this
+          if (!(t.semesterReportCycles && t.semesterReportCycles.some(
+            function(s) { return s.includeInSemesterReports === true && s.reportCycleId == cycleId }
+          ))) return
+
+          katCount++
+          var kat = $('<div>').addClass('rc-kat').text(`Task ${katCount}`).attr('title', t.name).appendTo(katsDiv)
+
+          function setupErr(msg) {
+            setupGroup.add(msg, 'error')
+            if (!kat.hasClass('error')) kat.addClass('error')
+            markSeverity('error')
+          }
+          function setupWarn(msg) {
+            setupGroup.add(msg, 'warning')
+            if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
+            markSeverity('warning')
+          }
+          function setupInfo(msg) {
+            setupGroup.add(msg, 'info')
           }
 
-          // Update stats
-          if (statusDot.hasClass('dot-red')) {
+          // Class vs Subject check
+          if (t.activityType && t.activityType !== 1) {
+            setupErr(`Task ${katCount} '${t.name}': assigned to a Subject not a Class — open the Learning Task and reassign to the specific class`)
+          }
+          // Reporting cycle linked
+          if (!t.semesterReportCycles || !t.semesterReportCycles.length) {
+            setupErr(`Task ${katCount} '${t.name}': not linked to a reporting cycle — edit Learning Task > Reporting and add Semester Report Cycle`)
+          }
+          if (!t.taskReportDescription) {
+            setupErr(`Task ${katCount} '${t.name}': no description — edit Learning Task > Reporting > Task Summary Description`)
+          }
+          if (t.gradingItems && t.gradingItems.filter(function(g) { return g.includeInSemesterReport === true }).length < 1) {
+            setupErr(`Task ${katCount} '${t.name}': grading components disabled — edit Learning Task > Reporting and tick Components`)
+          }
+          if (t.securityOptions && t.securityOptions.filter(function(g) { return g.gradingVisible === false }).length) {
+            setupWarn(`Task ${katCount} '${t.name}': grading not visible — edit Learning Task > Basic and tick Grading Visible`)
+          }
+          if (t.taskReportDescription && t.taskReportDescription.includes("\n\n")) {
+            setupWarn(`Task ${katCount} '${t.name}': extra blank line in description — edit Learning Task > Reporting > Task Summary Description`)
+          }
+          if (!(t.name.startsWith("Key Assessment Task") || t.name.startsWith("Unit") || t.name.startsWith("Exam") || t.name.startsWith("SAC") || t.name.startsWith("Semester") || t.name.startsWith("Structured"))) {
+            setupWarn(`Task ${katCount}: '${t.name}' does not follow naming format — edit Learning Task > Name`)
+          }
+          if (!(t.taskTitleOnReport.startsWith("Key Assessment Task") || t.taskTitleOnReport.startsWith("Unit") || t.taskTitleOnReport.startsWith("Exam") || t.taskTitleOnReport.startsWith("SAC") || t.taskTitleOnReport.startsWith("Semester") || t.taskTitleOnReport.startsWith("Structured"))) {
+            setupWarn(`Task ${katCount}: title on report '${t.taskTitleOnReport}' does not follow naming format — edit Learning Task > Reporting > Title on Report`)
+          }
+          if (t.includeInOverall) {
+            setupWarn(`Task ${katCount} '${t.name}': is emphasised — edit Learning Task > Reporting and untick Emphasise in Task Summary`)
+          }
+          if (t.showTaskDueDates) {
+            setupWarn(`Task ${katCount} '${t.name}': shows due date on report — edit Learning Task > Reporting and untick Display Task Due Dates`)
+          }
+          if (t.name.includes(" : ") || t.taskTitleOnReport.includes(" : ")) {
+            setupInfo(`Task ${katCount}: space before colon — edit Learning Task and fix`)
+          }
+          if (!t.dueDateTimestamp) {
+            setupInfo(`Task ${katCount} '${t.name}': no due date — edit Learning Task and add Due Date`)
+          }
+
+          // Results missing (goes in results group)
+          $.each(t.students, function() {
+            if (!this.results.length && classlist && classlist.includes(this.userId)) {
+              resultsGroup.add(`Task ${katCount} '${t.name}': results missing for ${this.userName}`, 'error')
+              if (!kat.hasClass('error')) kat.addClass('error')
+              markSeverity('error')
+            }
+          })
+        })
+
+        // Min tasks check
+        var minTasks = getMinTasks(subjectName, actName)
+        var yr       = detectYearLevel(subjectName, actName)
+        if (katCount < minTasks) {
+          var ctx = (yr === 7 || yr === 8)
+            ? `Year ${yr} non-core subject — minimum is ${minTasks} tasks`
+            : `minimum is ${minTasks} tasks`
+          setupGroup.add(
+            `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${ctx}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
+            'warning'
+          )
+          markSeverity('warning')
+        }
+      }
+
+      // ── Report field processing ──
+      function processReportIssues(results, excBody) {
+        var elemPill = elemDiv.find('.rc-elem-pill')
+        if (!elemPill.length) {
+          elemPill = $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
+        }
+        var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
+
+        $.each(results.d.entities, function() {
+          var studentName = this.name
+          $.each(this.results, function() {
+            var fieldName = this.name || ''
+            // Skip AEU-exempt fields when industrial action is active
+            if (isAeuExempt(fieldName)) return
+            // Skip Classes Attended and Classes Not Present — auto-entered
+            if (fieldName === 'Classes Attended' || fieldName === 'Classes Not Present') return
+
+            if (!this.value || (this.itemName == "Award" && this.value == "None")) {
+              setupGroup.add(`${studentName} — '${fieldName}' is missing`, 'error')
+              elemPill.removeClass('complete').addClass('error').text('Incomplete')
+              markSeverity('error')
+            }
+          })
+        })
+      }
+
+      // ── Main data fetch ──
+      var excend  = $('<div>').addClass('rc-excend').appendTo(actBody)
+      var exHdr   = $('<div>').addClass('rc-excend-header').click(function() { excend.toggleClass('open') }).appendTo(excend)
+      $('<span>').text('Excellence & Endeavour').appendTo(exHdr)
+      $('<span>').text('▶').css({ fontSize: '9px' }).appendTo(exHdr)
+      var excBody = $('<div>').addClass('rc-excend-body').appendTo(excend)
+
+      $.when(getReports(entityId, cycleId), getTasks(activityId), getEnrolments(activityId))
+        .done(function(results, tasks, enrolments) {
+          storedTaskData   = tasks[0]
+          storedReportData = results[0]
+          storedEnrolments = loadEnrolments(enrolments[0])
+          storedElemDiv    = elemDiv
+          storedExcBody    = excBody
+
+          $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
+          renderIssues()
+          loadExcend(results[0], activityId, cycleId, excBody)
+        }).done(function() {
+          count++
+          pf.css('width', (count / total * 100) + '%')
+
+          if (dot.hasClass('dot-red')) {
             stats.error++
-          } else if (statusDot.hasClass('dot-amber')) {
+          } else if (dot.hasClass('dot-amber')) {
             stats.warning++
           } else {
+            dot.removeClass('dot-blue').addClass('dot-green')
             stats.complete++
           }
           updateStats()
 
-          // Update staff pill when all done
           if (count === total) {
-            progressFill.css('width', '100%')
+            pf.css('width', '100%')
             if (hasError) {
-              statusPill.removeClass('loading warning complete').addClass('error').text(`${stats.error} Error${stats.error !== 1 ? 's' : ''}`)
+              pill.removeClass('loading warning complete').addClass('error').text('Errors')
             } else if (hasWarning) {
-              statusPill.removeClass('loading error complete').addClass('warning').text(`Warnings`)
+              pill.removeClass('loading error complete').addClass('warning').text('Warnings')
             } else {
-              statusPill.removeClass('loading error warning').addClass('complete').text('Complete ✓')
+              pill.removeClass('loading error warning').addClass('complete').text('Complete ✓')
             }
           }
         })
@@ -742,7 +959,6 @@ $(document).ready(function() {
     } catch { return false }
   }
 
-  // ── Enrolments ────────────────────────────────────────────────────────────
   function getEnrolments(activityId) {
     return $.ajax("/Services/Activity.svc/GetEnrolmentsByActivityId", {
       data: JSON.stringify({ activityId: activityId, page: 1, start: 0, limit: 100 }),
@@ -751,24 +967,22 @@ $(document).ready(function() {
   }
   function loadEnrolments(results) { return results.d.map(s => s.uid) }
 
-  // ── Reports ───────────────────────────────────────────────────────────────
   function getReports(entityId, cycleId) {
     return $.ajax("/Services/Reports.svc/GetReportReviewerBlob", {
       data: JSON.stringify({ entityType: 1, entityId: entityId, cycleId: cycleId }),
       contentType: 'application/json', type: 'POST'
     })
   }
-  function loadReports(results, activityId, cycleId, elemDiv, addIssue, excBody) {
-    var elemPill = $('<div>').addClass('rc-element-pill complete').text('Complete').appendTo(elemDiv)
-    var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
 
+  // ── Excend (separate from report issues) ─────────────────────────────────
+  function loadExcend(results, activityId, cycleId, excBody) {
+    var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
     getGPA(activityId, GPAcycleId).always(function(gpas) {
       $.each(results.d.entities, function() {
         var studentName = this.name
         var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
         $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
         var gp = [], ex = [], en = true
-
         $.each(this.results, function() {
           if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
             var abbr = (this.displayValue.match(/\b([A-Z])/g) || [this.displayValue]).join('')
@@ -791,19 +1005,13 @@ $(document).ready(function() {
               case "Rarely":       gp.push(1); break
             }
           }
-          if (!this.value || (this.itemName == "Award" && this.value == "None")) {
-            addIssue(`${studentName} — ${this.name} is missing`, 'error')
-            elemPill.removeClass('complete').addClass('error').text('Incomplete')
-          }
         })
-
         gp = gp.length ? gp : loadGPA(gpas, this.id)
         var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length).toFixed(2) : "NA"
         $('<div>').text(`GPA ${gpa}`).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-
         if (gpa >= 3.75 && en) {
           var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
-          $('<div>').addClass('rc-excend-award complete').text(award).appendTo(row)
+          $('<div>').addClass('rc-excend-award').text(award).appendTo(row)
         } else {
           $('<div>').appendTo(row)
         }
@@ -811,94 +1019,11 @@ $(document).ready(function() {
     })
   }
 
-  // ── Tasks ─────────────────────────────────────────────────────────────────
   function getTasks(activityId) {
     return $.ajax("/Services/LearningTasks.svc/GetAllLearningTasksByActivityId", {
       data: JSON.stringify({ activityId: activityId, page: 1, start: 0, limit: 2000 }),
       contentType: 'application/json', type: 'POST'
     })
-  }
-
-  function loadTasks(tasks, cycleId, subjectName, activityName, katsDiv, addIssue) {
-    var katCount = 0
-
-    $.each(tasks.d.data, function() {
-      var task = this
-      if (!(task.semesterReportCycles && task.semesterReportCycles.some(
-        t => t.includeInSemesterReports === true && t.reportCycleId == cycleId
-      ))) return
-
-      katCount++
-      var kat = $('<div>').addClass('rc-kat').text(`Task ${katCount}`).attr('title', task.name).appendTo(katsDiv)
-
-      // ── NEW: Check if task is assigned to a Subject instead of a Class ──
-      // activityId on the task should match a class (activity), not a subject
-      // Compass stores subject-level tasks with activityType or no activityId
-      if (task.activityType && task.activityType !== 1) {
-        addIssue(`Task ${katCount}: '${task.name}' is assigned to a Subject, not a Class — open the Learning Task and reassign it to the specific class`, 'error')
-        kat.addClass('error')
-      }
-
-      if (!task.taskReportDescription) {
-        addIssue(`Task ${katCount}: no description — edit Learning Task > Reporting > Task Summary Description`, 'error')
-        kat.addClass('error')
-      }
-      if (task.gradingItems && task.gradingItems.filter(g => g.includeInSemesterReport === true).length < 1) {
-        addIssue(`Task ${katCount}: grading components disabled — edit Learning Task > Reporting and tick Components`, 'error')
-        kat.addClass('error')
-      }
-      $.each(task.students, function() {
-        if (!this.results.length) {
-          addIssue(`Task ${katCount}: results missing for ${this.userName}`, 'error')
-          kat.addClass('error')
-        }
-      })
-      if (task.taskReportDescription && task.taskReportDescription.includes("\n\n")) {
-        addIssue(`Task ${katCount}: extra blank line in description — edit Learning Task > Reporting > Task Summary Description`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (!(task.name.startsWith("Key Assessment Task") || task.name.startsWith("Unit") || task.name.startsWith("Exam") || task.name.startsWith("SAC") || task.name.startsWith("Semester") || task.name.startsWith("Structured"))) {
-        addIssue(`Task ${katCount}: '${task.name}' does not follow naming format — edit Learning Task > Name`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (!(task.taskTitleOnReport.startsWith("Key Assessment Task") || task.taskTitleOnReport.startsWith("Unit") || task.taskTitleOnReport.startsWith("Exam") || task.taskTitleOnReport.startsWith("SAC") || task.taskTitleOnReport.startsWith("Semester") || task.taskTitleOnReport.startsWith("Structured"))) {
-        addIssue(`Task ${katCount}: title on report '${task.taskTitleOnReport}' does not follow naming format — edit Learning Task > Reporting > Title on Report`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (task.includeInOverall) {
-        addIssue(`Task ${katCount}: is emphasised — edit Learning Task > Reporting and untick Emphasise in Task Summary`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (task.showTaskDueDates) {
-        addIssue(`Task ${katCount}: shows due date on report — edit Learning Task > Reporting and untick Display Task Due Dates`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (task.securityOptions && task.securityOptions.filter(g => g.gradingVisible === false).length) {
-        addIssue(`Task ${katCount}: grading not visible — edit Learning Task > Basic and tick Grading Visible`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (task.name.includes(" : ") || task.taskTitleOnReport.includes(" : ")) {
-        addIssue(`Task ${katCount}: space before colon in name — edit Learning Task and fix`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-      if (!task.dueDateTimestamp) {
-        addIssue(`Task ${katCount}: '${task.name}' has no due date — edit Learning Task and add Due Date`, 'warning')
-        if (!kat.hasClass('error')) kat.addClass('warning')
-      }
-    })
-
-    // ── Minimum task count ────────────────────────────────────────────────
-    var minTasks = getMinTasks(subjectName, activityName)
-    var yr       = detectYearLevel(subjectName, activityName)
-    if (katCount < minTasks) {
-      var context = (yr === 7 || yr === 8)
-        ? `Year ${yr} non-core subject — minimum is ${minTasks} tasks`
-        : `minimum is ${minTasks} tasks`
-      addIssue(
-        `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${context}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
-        'warning'
-      )
-    }
   }
 
 })
