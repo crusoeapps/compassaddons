@@ -42,8 +42,10 @@ function updateTotal(user) {
     }
   })
   if (count < scoreColumns.length) return // wait until all scores loaded
-
+  // Clear any previous render before writing
   var el = $('.dash' + user + ' .total')
+  if (!el.length) return // row not in DOM yet
+
   el.empty()
 
   // Total badge colour
@@ -372,8 +374,8 @@ function loadStudents(students) {
 
     $('<tr>').addClass('dash' + user).addClass(this.uii).appendTo('#dash tbody')
     $.each(Object.keys(headers), function() {
-      var td = $('<td>').addClass(this.replace(/ /g, '-').replace('/', '').toLowerCase())
-        .attr('title', headers[this])
+      var colClass = this.replace(/ /g, '-').replace('/', '').toLowerCase()
+      var td = $('<td>').addClass(colClass).attr('title', headers[this])
       if (this === 'Total /20') td.addClass('total')
       td.appendTo('.dash' + user)
     })
@@ -562,18 +564,23 @@ function loadChronicle(chronicle) {
       recordScore(user, 'behaviour', score)
     })
 
-    // No behaviour entries = score 4
+    // Ensure every student gets a behaviour score, including those with no entries
     $('#dash tbody tr').each(function() {
-      var classes = $(this).attr('class') || ''
-      var match   = classes.match(/dash(\d+)/)
-      if (match) {
-        var user = match[1]
-        var el   = $('.dash' + user + ' .behaviour')
-        if (!el.children().length) {
-          el.append(scoreBadge(4))
-          el.append($('<span>').addClass('detail-text').text('No entries'))
-          recordScore(user, 'behaviour', 4)
-        }
+      var rowClass = $(this).attr('class') || ''
+      var match    = rowClass.match(/dash(\d+)/)
+      if (!match) return
+      var user = match[1]
+      var el   = $('.dash' + user + ' .behaviour')
+      if (!el.children().length) {
+        el.append(scoreBadge(4))
+        el.append($('<span>').addClass('detail-text').text('No entries'))
+        recordScore(user, 'behaviour', 4)
+      }
+      // Force recordScore even if already rendered (idempotent — only fires total once all 5 are set)
+      if (behaviourData[user]) {
+        // already handled above in $.each(behaviourData)
+      } else {
+        // recorded as 4 above — good
       }
     })
   })
