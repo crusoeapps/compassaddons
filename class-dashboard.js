@@ -20,12 +20,68 @@ if ($('body #dash').length) {
   $('body #dash').remove()
 }
 
+// Track scores per user for total column
+var scoreTracker = {}
+var scoreColumns = ['kats', 'gpa', 'attendance', 'behaviour', 'extra-curricular']
+
+function recordScore(user, column, score) {
+  if (!scoreTracker[user]) scoreTracker[user] = {}
+  scoreTracker[user][column] = score
+  updateTotal(user)
+}
+
+function updateTotal(user) {
+  var scores = scoreTracker[user]
+  if (!scores) return
+  var total = 0
+  var count = 0
+  scoreColumns.forEach(function(col) {
+    if (scores[col] !== undefined) {
+      total += scores[col]
+      count++
+    }
+  })
+  if (count < scoreColumns.length) return // wait until all scores loaded
+
+  var el = $('.dash' + user + ' .total')
+  el.empty()
+
+  // Total badge colour
+  var cls
+  if      (total >= 19) cls = 'score-4'
+  else if (total >= 12) cls = 'score-3'
+  else if (total >= 7)  cls = 'score-2'
+  else                  cls = 'score-1'
+
+  var totalBadge = $('<span>').addClass('score-badge').addClass(cls).text(total)
+  el.append(totalBadge)
+
+  // Rating label
+  var rating, ratingDetail
+  if (total >= 19) {
+    rating = 'Completion with Commendation'
+    ratingDetail = 'Exceeds expected standard'
+  } else if (total >= 12) {
+    rating = 'Completion'
+    ratingDetail = 'At expected standard'
+  } else if (total >= 7) {
+    rating = 'Participation'
+    ratingDetail = 'Meeting with advisory teacher required'
+  } else {
+    rating = 'Enrolment'
+    ratingDetail = 'Meeting with Community Leader required'
+  }
+
+  el.append($('<span>').addClass('detail-text').css('font-weight','600').text(rating))
+  el.append($('<span>').addClass('detail-text').text(ratingDetail))
+}
+
 $(`<div id="dash"><style type="text/css">
 #dash {
   position: fixed;
   box-sizing: border-box;
   top: 0;
-  padding: 64px calc(50% - 560px);
+  padding: 64px calc(50% - 600px);
   z-index: 100;
   background-color: #f0f2f5;
   width: 100%;
@@ -37,6 +93,11 @@ $(`<div id="dash"><style type="text/css">
   display: flex;
   align-items: center;
   margin: 1em;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+#dash .header h1 {
+  flex: 1;
 }
 #dash table {
   background-color: white;
@@ -67,11 +128,20 @@ $(`<div id="dash"><style type="text/css">
   background-color: #f8f8f8;
   border-bottom: #ccc 1px solid;
 }
+#dash th.total-col {
+  background-color: #eef2ff;
+  color: #3730a3;
+  border-left: 2px solid #c7d2fe;
+}
 #dash td {
   position: relative;
   padding: 0.75em 1em;
   border: 0;
   font-size: 0.9em;
+}
+#dash td.total {
+  border-left: 2px solid #c7d2fe;
+  background-color: #f5f7ff;
 }
 #dash .score-badge {
   display: inline-block;
@@ -115,9 +185,6 @@ $(`<div id="dash"><style type="text/css">
   padding: 1em;
   color: #666;
   font-size: 0.85em;
-}
-#dash .note a, #dash .note a:visited {
-  color: #666;
 }
 #dash thead tr th:first-child {
   border-radius: 0.5em 0 0 0;
@@ -167,7 +234,7 @@ $(`<div id="dash"><style type="text/css">
 
 $('<div>').addClass('header').appendTo('#dash')
 $('<h1>').addClass('title')
-  .text('Class Summary: ' + $('#ClassCodeText').text())
+  .text('Advisory Rubric Calculator: ' + $('#ClassCodeText').text())
   .appendTo('#dash .header')
 $('<div>').addClass('button').text('Close')
   .click(function() {
@@ -182,22 +249,25 @@ $('<div>').addClass('button-print').text('🖨 Print to PDF')
 
 // ── Table structure ──────────────────────────────────────────────────────────
 var headers = {
-  'Name':           '',
-  'KATs':           'Key Assessment Tasks score (1–4). Shows breakdown of submission status.',
-  'GPA':            'Grade Point Average on latest progress report (1–4 scale). Shows growth from previous report.',
-  'Attendance':     'Overall attendance across all classes. Score: 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
-  'Behaviour':      'Behaviour & conduct score (1–4) based on detentions, suspensions and Compass points.',
-  'Extra Curricular':'Involvement in non-classroom activities. Score: 1=none, 2=one, 3=two–three, 4=four+ (inc. 2 non-sport).'
+  'Name':            '',
+  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date.',
+  'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
+  'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98% (fully explained absences).',
+  'Behaviour':       'Behaviour & conduct (1–4). Based on detentions, suspensions, Compass points and OCWE posts.',
+  'Extra Curricular':'Involvement in non-classroom activities. 1=none, 2=one, 3=two–three, 4=four+ (inc. 2 non-sport).',
+  'Total /20':       'Sum of all five scores. 19-20=Completion with Commendation, 12-18=Completion, 7-11=Participation, <7=Enrolment.'
 }
 
 $('<table>').append($('<thead>').append($('<tr>'))).appendTo('#dash')
 $.each(Object.keys(headers), function() {
-  $('<th>').attr('title', headers[this]).text(this).appendTo('#dash thead tr')
+  var th = $('<th>').attr('title', headers[this]).text(this)
+  if (this === 'Total /20') th.addClass('total-col')
+  th.appendTo('#dash thead tr')
 })
 $('<tbody>').appendTo('#dash table')
 
 $('<div>').addClass('note')
-  .html('Crusoe College &mdash; Class Dashboard. Scores are 1 (red) to 4 (green).').appendTo('#dash')
+  .html('Crusoe College &mdash; Advisory Rubric Calculator. Scores 1 (red) to 4 (green). Total /20: 19–20 Completion with Commendation &nbsp;|&nbsp; 12–18 Completion &nbsp;|&nbsp; 7–11 Participation &nbsp;|&nbsp; &lt;7 Enrolment').appendTo('#dash')
 
 // ── Helper: render a score badge ─────────────────────────────────────────────
 function scoreBadge(score) {
@@ -223,7 +293,6 @@ function getStudents(startDate, endDate, activityId) {
   })
 }
 
-// Overall attendance across all classes (replaces getAttendance)
 function getAllAttendance(userId) {
   return $.ajax("/Services/Attendance.svc/GetAttendanceSummary" + "?_dc=" + new Date().getTime(), {
     data: JSON.stringify({
@@ -301,21 +370,20 @@ function loadStudents(students) {
     var user = this.uid
     userIds.push(user)
 
-    // Build row
     $('<tr>').addClass('dash' + user).addClass(this.uii).appendTo('#dash tbody')
     $.each(Object.keys(headers), function() {
-      $('<td>').addClass(this.replace(/ /g, '-').toLowerCase())
-        .attr('title', headers[this]).appendTo('.dash' + user)
+      var td = $('<td>').addClass(this.replace(/ /g, '-').replace('/', '').toLowerCase())
+        .attr('title', headers[this])
+      if (this === 'Total /20') td.addClass('total')
+      td.appendTo('.dash' + user)
     })
 
-    // Name cell
     $('<a>', { href: '/Records/User.aspx?userId=' + user, text: this.un })
       .addClass('extra-info-link sel-student-name')
       .attr('data-action-tip-uid', user)
       .attr('id', user)
       .appendTo('.dash' + user + ' .name')
 
-    // Trigger data loads
     getAllAttendance(user).done((data) => loadAllAttendance(data, user))
     getTasks(user).done(loadTasks)
     getGPA(user).done(loadGPA)
@@ -325,7 +393,7 @@ function loadStudents(students) {
   getChronicle(activityId).done(loadChronicle)
 }
 
-// ── Attendance: all classes combined ─────────────────────────────────────────
+// ── Attendance ────────────────────────────────────────────────────────────────
 // Score: 1=≤90%, 2=>90%, 3=>95%, 4=>98%
 function loadAllAttendance(classes, user) {
   var im = 0, npu = 0
@@ -344,9 +412,10 @@ function loadAllAttendance(classes, user) {
   var el = $('.dash' + user + ' .attendance')
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(pct + '%'))
+  recordScore(user, 'attendance', score)
 }
 
-// ── KATs: learning tasks included in semester reports ────────────────────────
+// ── KATs ──────────────────────────────────────────────────────────────────────
 // Score: 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all on time
 function loadTasks(tasks) {
   var user = this.user
@@ -357,23 +426,23 @@ function loadTasks(tasks) {
     if (this.includeInSemesterReports) {
       total++
       switch (this.students[0].submissionStatus) {
-        case 1: pending++;                    break; // pending
-        case 2: overdue++;                    break; // overdue (not submitted)
-        case 3: submitted++; ontime++;        break; // on time
-        case 4: submitted++; late++;          break; // submitted late
+        case 1: pending++;             break;
+        case 2: overdue++;             break;
+        case 3: submitted++; ontime++; break;
+        case 4: submitted++; late++;   break;
       }
     }
   })
 
   var score
   if (total === 0) {
-    score = 4 // no tasks yet — neutral
+    score = 4
   } else {
     var pct = submitted / total
-    if (pct < 0.5)          score = 1
-    else if (pct < 1.0)     score = 2
+    if (pct < 0.5)                    score = 1
+    else if (pct < 1.0)               score = 2
     else if (late > 0 || overdue > 0) score = 3
-    else                    score = 4
+    else                              score = 4
   }
 
   var parts = []
@@ -386,10 +455,11 @@ function loadTasks(tasks) {
   var el = $('.dash' + user + ' .kats')
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail))
+  recordScore(user, 'kats', score)
 }
 
-// ── GPA: current score + growth arrow ────────────────────────────────────────
-// Score maps directly: GPA 1–4 scale
+// ── GPA ───────────────────────────────────────────────────────────────────────
+// Score: 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75 (from master rubric)
 function loadGPA(cycles) {
   var user = this.user
   var el = $('.dash' + user + ' .gpa')
@@ -397,12 +467,17 @@ function loadGPA(cycles) {
   if (!cycles.d.length) {
     el.append(scoreBadge('?'))
     el.append($('<span>').addClass('detail-text').text('No data'))
+    recordScore(user, 'gpa', 1)
     return
   }
 
   var latest = cycles.d[cycles.d.length - 1].score
-  // Score is the rounded GPA (already 1–4)
-  var score = Math.min(4, Math.max(1, Math.round(latest)))
+  var score
+  if      (latest > 3.75) score = 4
+  else if (latest > 3.5)  score = 3
+  else if (latest > 2.5)  score = 2
+  else                    score = 1
+
   el.append(scoreBadge(score))
 
   if (cycles.d.length >= 2) {
@@ -419,36 +494,21 @@ function loadGPA(cycles) {
   } else {
     el.append($('<span>').addClass('detail-text').text('GPA ' + latest.toFixed(2)))
   }
+  recordScore(user, 'gpa', score)
 }
 
-// ── Chronicle / Behaviour ─────────────────────────────────────────────────────
+// ── Behaviour ─────────────────────────────────────────────────────────────────
 // Score: 4=exemplary, 3=acceptable, 2=sometimes unacceptable, 1=frequently unacceptable
-// Tracked per student: detentions, suspensions, negative points, commendations, COWP
-// NOTE: category IDs below are placeholders — update to match your Compass instance.
-// Chronicle category IDs used:
-//   Detentions  → look for categoryId matching "Detention"
-//   Suspensions → look for categoryId matching "Suspension"
-//   Negative points (Red/Amber) → counted from chronicle point colours
-//   Commendations → Green points
-//   COWP        → "Class Without Permission" category
+// FIXED: now matches "Out of Class Without Explanation" correctly
 
-var behaviourData = {} // keyed by userId
+var behaviourData = {}
 
 function loadChronicle(chronicle) {
   $.get("/Services/ReferenceDataCache.svc/GetChronicleCategories", function(categories) {
 
-    // Build a lookup: name → id
-    var catByName = {}
-    $.each(categories.d, function() {
-      catByName[this.name.toLowerCase()] = this.id
-    })
-
-    // Reset behaviour tracking for all students
-    $('.dash-row').each(function() {})
-
     $.each(chronicle.d, function() {
-      var catId   = this.categoryId
-      var catName = (categories.d.filter(c => c.id == catId)[0] || {}).name || ''
+      var catId    = this.categoryId
+      var catName  = (categories.d.filter(c => c.id == catId)[0] || {}).name || ''
       var catLower = catName.toLowerCase()
 
       if (!this.counts) return
@@ -456,7 +516,7 @@ function loadChronicle(chronicle) {
       $.each(this.counts, function() {
         var user = this.StudentId
         if (!behaviourData[user]) {
-          behaviourData[user] = { detentions: 0, suspensions: 0, negPoints: 0, commendations: 0, cowp: 0 }
+          behaviourData[user] = { detentions: 0, suspensions: 0, negPoints: 0, commendations: 0, ocwe: 0 }
         }
         var d = behaviourData[user]
 
@@ -466,29 +526,24 @@ function loadChronicle(chronicle) {
         if (catLower.includes('suspension') || catLower.includes('suspend')) {
           d.suspensions += (this.Grey + this.Green + this.Amber + this.Red)
         }
-        if (catLower.includes('without permission') || catLower.includes('cowp')) {
-          d.cowp += (this.Grey + this.Green + this.Amber + this.Red)
+        // FIXED: match "Out of Class Without Explanation"
+        if (catLower.includes('without explanation') || catLower.includes('without permission') || catLower.includes('ocwe') || catLower.includes('cowp')) {
+          d.ocwe += (this.Grey + this.Green + this.Amber + this.Red)
         }
-        // Negative points = Red + Amber chronicle entries (any category)
-        d.negPoints    += (this.Red + this.Amber)
-        // Commendations = Green points
+        d.negPoints     += (this.Red + this.Amber)
         d.commendations += this.Green
       })
     })
 
-    // Now score each student
     $.each(behaviourData, function(user, d) {
       var score
-      // Score 1: 2+ detentions OR 2+ suspensions OR 15+ negative points
       if (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) {
         score = 1
-      // Score 2: 1 detention OR 1 suspension OR 8+ negative points
       } else if (d.detentions >= 1 || d.suspensions >= 1 || d.negPoints >= 8) {
         score = 2
-      // Score 4: 12+ commendations AND ≤2 negative AND ≤2 COWP
-      } else if (d.commendations >= 12 && d.negPoints <= 2 && d.cowp <= 2) {
+      } else if (d.commendations >= 12 && d.negPoints <= 2 && d.ocwe === 0) {
+        // Score 4 requires ZERO OCWE posts per rubric
         score = 4
-      // Score 3: no detentions, no suspensions, ≤5 negative points
       } else {
         score = 3
       }
@@ -498,15 +553,16 @@ function loadChronicle(chronicle) {
       if (d.suspensions)   detail.push(d.suspensions + ' suspension' + (d.suspensions > 1 ? 's' : ''))
       if (d.negPoints)     detail.push(d.negPoints + ' neg pts')
       if (d.commendations) detail.push(d.commendations + ' commendations')
-      if (d.cowp)          detail.push(d.cowp + ' COWP')
+      if (d.ocwe)          detail.push(d.ocwe + ' OCWE')
 
       var el = $('.dash' + user + ' .behaviour')
       el.empty()
       el.append(scoreBadge(score))
       el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
+      recordScore(user, 'behaviour', score)
     })
 
-    // Any student not in behaviourData gets score 4 (no entries = exemplary)
+    // No behaviour entries = score 4
     $('#dash tbody tr').each(function() {
       var classes = $(this).attr('class') || ''
       var match   = classes.match(/dash(\d+)/)
@@ -516,18 +572,15 @@ function loadChronicle(chronicle) {
         if (!el.children().length) {
           el.append(scoreBadge(4))
           el.append($('<span>').addClass('detail-text').text('No entries'))
+          recordScore(user, 'behaviour', 4)
         }
       }
     })
   })
 }
 
-// ── Extra Curricular: events attended ────────────────────────────────────────
-// Score: 1=0 events, 2=1 event, 3=2–3 events, 4=4+ events (inc. 2 non-sport)
-// NOTE: Compass does not reliably tag event types via this API.
-// The script counts total events attended and scores accordingly.
-// For the 4-score non-sport check, you will need to tag events in Compass
-// with a sport/non-sport category, or adjust manually.
+// ── Extra Curricular ──────────────────────────────────────────────────────────
+// Score: 1=0 events, 2=1 event, 3=2–3 events, 4=4+ events
 function loadEvents(classes, user) {
   var eventsAttended = 0
   $.each(classes.d, function() {
@@ -545,9 +598,10 @@ function loadEvents(classes, user) {
   var el = $('.dash' + user + ' .extra-curricular')
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(eventsAttended + ' event' + (eventsAttended !== 1 ? 's' : '')))
+  recordScore(user, 'extra-curricular', score)
 }
 
-// ── Kick off ─────────────────────────────────────────────────────────────────
+// ── Kick off ──────────────────────────────────────────────────────────────────
 getStudents(startDate, endDate, activityId).done(loadStudents)
 
 })
