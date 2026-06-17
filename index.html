@@ -140,122 +140,6 @@
       color: #1d40ae;
     }
 
-    /* ── GitHub setup box ── */
-    .setup-box {
-      background: var(--surface);
-      border: 1px solid var(--warn-border);
-      border-left: 4px solid var(--testing);
-      border-radius: var(--radius);
-      margin-bottom: 2rem;
-      overflow: hidden;
-    }
-    .setup-box-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.85rem 1.25rem;
-      background: var(--warn-lt);
-      border-bottom: 1px solid var(--warn-border);
-      cursor: pointer;
-      user-select: none;
-      gap: 0.75rem;
-    }
-    .setup-box-header-left {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-    .setup-box-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--warn);
-    }
-    .setup-box-sub {
-      font-size: 12px;
-      color: #a16207;
-      margin-top: 1px;
-    }
-    .setup-toggle {
-      font-size: 12px;
-      font-weight: 500;
-      color: #a16207;
-      flex-shrink: 0;
-      transition: transform 0.2s;
-    }
-    .setup-toggle.open { transform: rotate(180deg); }
-    .setup-body {
-      display: none;
-      padding: 1.25rem;
-    }
-    .setup-body.open { display: block; }
-    .setup-steps {
-      list-style: none;
-      counter-reset: step;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    .setup-steps li {
-      counter-increment: step;
-      display: flex;
-      gap: 0.85rem;
-      align-items: flex-start;
-    }
-    .setup-steps li::before {
-      content: counter(step);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--accent);
-      color: white;
-      font-size: 11px;
-      font-weight: 600;
-      margin-top: 1px;
-      flex-shrink: 0;
-    }
-    .setup-steps li .step-text {
-      font-size: 13px;
-      color: var(--text);
-      line-height: 1.6;
-    }
-    .setup-steps li .step-text strong {
-      font-weight: 600;
-    }
-    .setup-steps li .step-text code {
-      font-family: monospace;
-      font-size: 12px;
-      background: #f3f4f6;
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 1px 5px;
-      color: var(--text);
-    }
-    .setup-steps li .step-text a {
-      color: var(--accent);
-      text-decoration: underline;
-    }
-    .setup-result {
-      margin-top: 1rem;
-      padding: 0.85rem 1rem;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 0.5rem;
-      font-size: 13px;
-      color: #15803d;
-    }
-    .setup-result strong { font-weight: 600; }
-    .setup-result code {
-      font-family: monospace;
-      font-size: 12px;
-      background: #dcfce7;
-      border-radius: 3px;
-      padding: 1px 5px;
-      color: #166534;
-    }
-
     /* ── Legend ── */
     .legend {
       display: flex;
@@ -570,7 +454,7 @@
 
   <!-- Page header -->
   <div class="page-header">
-    <h1>Crusoe College — Compass Power Tools</h1>
+    <h1>Crusoe College — Advisory Rubric Calculator</h1>
     <p>Browser bookmarklets that add features to Compass. All data stays between your browser and Compass — nothing is sent anywhere else.</p>
   </div>
 
@@ -582,57 +466,7 @@
     </div>
   </div>
 
-  <!-- GitHub setup instructions (collapsible) -->
-  <div class="setup-box">
-    <div class="setup-box-header" id="setupToggleBtn" onclick="toggleSetup()">
-      <div class="setup-box-header-left">
-        <span>⚙️</span>
-        <div>
-          <div class="setup-box-title">Setup required — Class Dashboard needs a GitHub Pages URL</div>
-          <div class="setup-box-sub">Click to see step-by-step instructions</div>
-        </div>
-      </div>
-      <span class="setup-toggle" id="setupArrow">▼</span>
-    </div>
-    <div class="setup-body" id="setupBody">
-      <ol class="setup-steps">
-        <li>
-          <div class="step-text">
-            <strong>Go to GitHub and sign in</strong> at <a href="https://github.com" target="_blank">github.com</a>. If you don't have an account, create a free one.
-          </div>
-        </li>
-        <li>
-          <div class="step-text">
-            <strong>Fork the original repo.</strong> Go to <a href="https://github.com/drewkerr/compass" target="_blank">github.com/drewkerr/compass</a> and click the <strong>Fork</strong> button (top right). Choose your account as the destination. This copies all the files to your own account.
-          </div>
-        </li>
-        <li>
-          <div class="step-text">
-            <strong>Enable GitHub Pages.</strong> Inside your forked repo, go to <strong>Settings</strong> → <strong>Pages</strong> (left sidebar). Under "Source", select <strong>Deploy from a branch</strong>, choose <code>master</code> branch, folder <code>/ (root)</code>, then click <strong>Save</strong>.
-          </div>
-        </li>
-        <li>
-          <div class="step-text">
-            <strong>Wait 1–2 minutes</strong> for GitHub to build the site. Then refresh the Pages settings page — it will show a green banner with your URL.
-          </div>
-        </li>
-        <li>
-          <div class="step-text">
-            <strong>Your URL will look like this:</strong> <code>https://YOURUSERNAME.github.io/compass/</code> — replace <code>YOURUSERNAME</code> with your actual GitHub username. This is the base URL for all your hosted scripts.
-          </div>
-        </li>
-        <li>
-          <div class="step-text">
-            <strong>Update the Class Dashboard bookmarklet</strong> in this page's HTML. Find the text <code>YOUR-GITHUB-PAGES-URL</code> and replace it with your actual URL, e.g. <code>duaneanderson.github.io/compass</code>.
-          </div>
-        </li>
-      </ol>
-      <div class="setup-result">
-        ✅ <strong>Once done,</strong> your Class Dashboard script will load from <code>https://YOURUSERNAME.github.io/compass/class-dashboard.js</code> — hosted by you, updated by you.
-      </div>
-    </div>
-  </div>
-
+  <!-- Setup complete notice -->
   <!-- Legend -->
   <div class="legend">
     <div class="legend-item"><div class="legend-dot stable"></div> Stable — ready to use</div>
@@ -651,7 +485,7 @@
         <div class="tool-card-status stable">● Stable</div>
       </div>
       <div class="tool-card-footer">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=2';})();" class="bookmarklet">⭐ Class Dashboard 2.0</a>
+        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://YOUR-GITHUB-PAGES-URL/class-dashboard.js?v=2';})();" class="bookmarklet">⭐ Class Dashboard 2.0</a>
         <span class="drag-hint">drag me</span>
       </div>
     </div>
@@ -725,23 +559,12 @@
   <!-- Footer -->
   <footer>
     <span>Crusoe College — Compass Power Tools — Semester 1, 2026</span>
+    <span>MIT License · <a href="https://github.com/drewkerr/compass" target="_blank">Original source on GitHub</a></span>
   </footer>
 
 </div>
 
 <script>
-  // Collapsible setup box
-  function toggleSetup() {
-    var body = document.getElementById('setupBody')
-    var arrow = document.getElementById('setupArrow')
-    var isOpen = body.classList.contains('open')
-    body.classList.toggle('open', !isOpen)
-    arrow.classList.toggle('open', !isOpen)
-    document.querySelector('.setup-box-sub').textContent = isOpen
-      ? 'Click to see step-by-step instructions'
-      : 'Click to collapse'
-  }
-
   // Show drag tooltip on bookmarklet hover
   var bookmarklets = document.querySelectorAll('.bookmarklet')
   var tooltip = document.getElementById('dragTooltip')
