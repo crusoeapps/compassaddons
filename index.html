@@ -3,408 +3,270 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Compass Power Tools — Crusoe College</title>
+  <title>Compass Tools — Crusoe College</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #f0f2f5;
-      --surface:   #ffffff;
-      --border:    #e2e5ea;
-      --text:      #1a1d23;
-      --muted:     #6b7280;
-      --accent:    #0057d9;
-      --accent-lt: #e8f0fe;
-      --stable:    #16a34a;
-      --testing:   #d97706;
-      --exp:       #9333ea;
-      --stable-lt: #dcfce7;
-      --testing-lt:#fef3c7;
-      --exp-lt:    #f3e8ff;
-      --warn:      #92400e;
-      --warn-lt:   #fef3c7;
-      --warn-border:#fde68a;
-      --radius:    0.75rem;
-      --shadow:    0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-hover: 0 4px 12px rgba(0,0,0,0.10);
+      --bg:       #f4f6f9;
+      --surface:  #ffffff;
+      --border:   #e4e7ed;
+      --text:     #111827;
+      --muted:    #6b7280;
+      --accent:   #0057d9;
+      --accent2:  #1a6bff;
+      --green:    #16a34a;
+      --amber:    #d97706;
+      --purple:   #7c3aed;
+      --radius:   12px;
     }
+
+    html { scroll-behavior: smooth; }
 
     body {
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 15px;
-      line-height: 1.6;
-      color: var(--text);
       background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* ── Top bar ── */
     .topbar {
-      background: var(--surface);
+      background: white;
       border-bottom: 1px solid var(--border);
       padding: 0 2rem;
+      height: 54px;
       display: flex;
       align-items: center;
-      gap: 1rem;
-      height: 56px;
+      gap: 12px;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 50;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
     .topbar-logo {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
-      font-weight: 600;
+      gap: 8px;
+      font-weight: 700;
       font-size: 15px;
       color: var(--accent);
       text-decoration: none;
-      flex-shrink: 0;
     }
-    .topbar-divider {
-      width: 1px;
-      height: 20px;
-      background: var(--border);
-    }
-    .topbar-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--muted);
-    }
+    .topbar-sep { width: 1px; height: 18px; background: var(--border); }
+    .topbar-label { font-size: 13px; font-weight: 500; color: var(--muted); }
     .topbar-badge {
       margin-left: auto;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
-      background: var(--accent-lt);
+      background: #e8f0fe;
       color: var(--accent);
-      padding: 0.25rem 0.6rem;
-      border-radius: 2rem;
-      letter-spacing: 0.01em;
+      padding: 3px 10px;
+      border-radius: 20px;
     }
 
-    /* ── Page layout ── */
+    /* ── Page ── */
     .page {
-      max-width: 860px;
+      max-width: 900px;
       margin: 0 auto;
-      padding: 2rem 1.5rem 4rem;
+      padding: 3rem 1.5rem 5rem;
     }
 
-    /* ── Page header ── */
-    .page-header {
-      margin-bottom: 2rem;
+    /* ── Hero ── */
+    .hero {
+      margin-bottom: 2.5rem;
     }
-    .page-header h1 {
-      font-size: 22px;
-      font-weight: 600;
+    .hero-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .hero h1 {
+      font-size: 28px;
+      font-weight: 700;
       color: var(--text);
-      margin-bottom: 0.5rem;
+      line-height: 1.2;
+      margin-bottom: 12px;
     }
-    .page-header p {
-      color: var(--muted);
+    .hero p {
       font-size: 14px;
-      max-width: 52ch;
+      color: var(--muted);
+      max-width: 46ch;
+      line-height: 1.7;
     }
 
-    /* ── How-to strip ── */
+    /* ── How to use ── */
     .howto {
       display: flex;
       align-items: flex-start;
-      gap: 1rem;
-      background: var(--accent-lt);
-      border: 1px solid #c7d9fb;
+      gap: 14px;
+      background: #eef4ff;
+      border: 1px solid #c5d8fb;
       border-radius: var(--radius);
-      padding: 1rem 1.25rem;
-      margin-bottom: 1.25rem;
+      padding: 14px 18px;
+      margin-bottom: 2.5rem;
     }
-    .howto-icon {
-      font-size: 20px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .howto-text {
-      font-size: 13px;
-      color: #1d40ae;
-      line-height: 1.6;
-    }
-    .howto-text strong { font-weight: 600; }
-    .howto-text kbd {
-      font-family: 'Inter', sans-serif;
+    .howto-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .howto-body { font-size: 13px; color: #1e3a8a; line-height: 1.65; }
+    .howto-body strong { font-weight: 600; }
+    .howto-body kbd {
+      font-family: inherit;
       font-size: 11px;
-      background: #fff;
-      border: 1px solid #c7d9fb;
+      background: white;
+      border: 1px solid #c5d8fb;
       border-radius: 4px;
       padding: 1px 5px;
-      color: #1d40ae;
+      color: #1e3a8a;
     }
 
-    /* ── Legend ── */
-    .legend {
-      display: flex;
-      gap: 1.25rem;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-    }
-    .legend-item {
+    /* ── Section label ── */
+    .section-label {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-    }
-    .legend-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-    .legend-dot.stable  { background: var(--stable); }
-    .legend-dot.testing { background: var(--testing); }
-    .legend-dot.exp     { background: var(--exp); }
-
-    /* ── Section headings ── */
-    .section-label {
+      gap: 10px;
       font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
+      font-weight: 700;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
       color: var(--muted);
-      margin: 2rem 0 0.75rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
 
     /* ── Tool grid ── */
     .tool-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 2.5rem;
     }
 
     /* ── Tool card ── */
     .tool-card {
-      background: var(--surface);
+      background: white;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: box-shadow 0.15s ease, transform 0.15s ease;
-      position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: box-shadow 0.18s ease, transform 0.18s ease;
     }
     .tool-card:hover {
-      box-shadow: var(--shadow-hover);
-      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.09);
+      transform: translateY(-2px);
     }
-    .tool-card::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      border-radius: var(--radius) 0 0 var(--radius);
+    .tool-card-stripe {
+      height: 4px;
+      flex-shrink: 0;
     }
-    .tool-card.stable::before  { background: var(--stable); }
-    .tool-card.testing::before { background: var(--testing); }
-    .tool-card.exp::before     { background: var(--exp); }
+    .tool-card.stable  .tool-card-stripe { background: var(--green); }
+    .tool-card.testing .tool-card-stripe { background: var(--amber); }
+    .tool-card.exp     .tool-card-stripe { background: var(--purple); }
 
     .tool-card-body {
-      padding: 1rem 1rem 0.75rem 1.25rem;
+      padding: 18px 18px 14px;
       flex: 1;
     }
     .tool-card-name {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       color: var(--text);
-      margin-bottom: 0.25rem;
+      margin-bottom: 6px;
     }
     .tool-card-desc {
       font-size: 13px;
       color: var(--muted);
-      line-height: 1.5;
+      line-height: 1.55;
+      margin-bottom: 12px;
     }
-    .tool-card-status {
+    .tool-card-tag {
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
+      gap: 5px;
       font-size: 11px;
       font-weight: 600;
-      border-radius: 2rem;
-      padding: 0.15rem 0.5rem;
-      margin-top: 0.6rem;
+      border-radius: 20px;
+      padding: 3px 9px;
     }
-    .tool-card-status.stable  { background: var(--stable-lt);  color: #15803d; }
-    .tool-card-status.testing { background: var(--testing-lt); color: #b45309; }
-    .tool-card-status.exp     { background: var(--exp-lt);     color: #7e22ce; }
+    .tool-card-tag.stable  { background: #dcfce7; color: #15803d; }
+    .tool-card-tag.testing { background: #fef3c7; color: #92400e; }
+    .tool-card-tag.exp     { background: #ede9fe; color: #5b21b6; }
+    .tool-card-tag::before { content: '●'; font-size: 7px; }
 
-    .tool-card-footer {
-      padding: 0.6rem 1rem 0.75rem 1.25rem;
+    /* ── Bookmarklet drag zone ── */
+    .tool-card-drag {
+      padding: 12px 18px 14px;
+      background: #f8fafc;
+      border-top: 1px solid var(--border);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      border-top: 1px solid var(--border);
-      background: #fafbfc;
+      gap: 10px;
     }
+    .drag-hint-text {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .drag-hint-text strong {
+      display: block;
+      color: #374151;
+      font-weight: 600;
+      font-size: 11.5px;
+      margin-bottom: 1px;
+    }
+
+    /* ── The bookmarklet button — the star of the show ── */
     .bookmarklet {
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-family: inherit;
       font-size: 13px;
-      font-weight: 500;
-      color: var(--surface);
-      background: var(--accent);
-      border: 2px solid var(--accent);
-      border-radius: 0.4rem;
-      padding: 0.35rem 0.8rem;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #0057d9 0%, #1a6bff 100%);
+      border: none;
       text-decoration: none;
-      transition: background 0.15s, color 0.15s;
       cursor: grab;
       user-select: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,87,217,0.35), 0 1px 2px rgba(0,87,217,0.2);
+      transition: box-shadow 0.15s, transform 0.15s, background 0.15s;
+      position: relative;
     }
     .bookmarklet:hover {
-      background: var(--surface);
-      color: var(--accent);
+      box-shadow: 0 4px 16px rgba(0,87,217,0.45), 0 2px 4px rgba(0,87,217,0.25);
+      transform: translateY(-1px);
+      background: linear-gradient(135deg, #004ec7 0%, #0f5df0 100%);
     }
-    .bookmarklet:active { cursor: grabbing; }
-    .drag-hint {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    /* ── Coming soon section ── */
-    .coming-soon-box {
-      margin-top: 2.5rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      box-shadow: var(--shadow);
-    }
-    .coming-soon-box h2 {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 0.5rem;
-    }
-    .coming-soon-box p {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 1rem;
-    }
-    .coming-soon-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-    .coming-soon-pill {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 2rem;
-      padding: 0.2rem 0.65rem;
-    }
-
-    /* ── Sandbox panel ── */
-    .sandbox-section {
-      margin-top: 3rem;
-    }
-    .sandbox-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .sandbox-header h2 {
+    .bookmarklet:active { cursor: grabbing; transform: translateY(0); }
+    .bookmarklet-arrow {
       font-size: 16px;
-      font-weight: 600;
+      animation: bounce 1.6s ease-in-out infinite;
     }
-    .sandbox-header .badge-exp {
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--exp-lt);
-      color: #7e22ce;
-      padding: 0.2rem 0.55rem;
-      border-radius: 2rem;
-    }
-    .sandbox-desc {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 1rem;
-      max-width: 56ch;
-    }
-    .sandbox-frame-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      box-shadow: var(--shadow);
-    }
-    .sandbox-toolbar {
-      background: #f5f6f8;
-      border-bottom: 1px solid var(--border);
-      padding: 0.6rem 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .sandbox-toolbar-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .sandbox-toolbar-dot:nth-child(1) { background: #ff5f57; }
-    .sandbox-toolbar-dot:nth-child(2) { background: #febc2e; }
-    .sandbox-toolbar-dot:nth-child(3) { background: #28c840; }
-    .sandbox-url-bar {
-      flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 0.35rem;
-      padding: 0.25rem 0.75rem;
-      font-size: 12px;
-      color: var(--muted);
-      font-family: 'Inter', monospace;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin: 0 0.25rem;
-    }
-    .sandbox-url-bar span { color: var(--accent); }
-    .sandbox-note {
-      font-size: 12px;
-      color: #92400e;
-      padding: 0.75rem 1rem;
-      background: #fffbeb;
-      border-bottom: 1px solid #fde68a;
-      display: flex;
-      gap: 0.5rem;
-    }
-    iframe#sandbox {
-      width: 100%;
-      height: 520px;
-      border: none;
-      display: block;
-      background: white;
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-3px); }
     }
 
-    /* ── Footer ── */
-    footer {
-      margin-top: 3rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--border);
-      font-size: 12px;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-    footer a, footer a:visited { color: var(--muted); text-decoration: underline; }
-
-    /* ── Drag tooltip ── */
+    /* Drag instruction tooltip that appears on hover across the page */
     .drag-tooltip {
       display: none;
       position: fixed;
@@ -414,59 +276,216 @@
       text-align: center;
       font-size: 13px;
       font-weight: 500;
-      padding: 0.5rem 1rem;
-      z-index: 999;
+      padding: 9px 1rem;
+      z-index: 200;
       pointer-events: none;
+      letter-spacing: 0.01em;
+      box-shadow: 0 2px 8px rgba(0,87,217,0.3);
     }
-    .drag-tooltip.visible { display: block; }
+    .drag-tooltip.show { display: block; }
 
-    /* ── Responsive ── */
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .legend-dot.stable  { background: var(--green); }
+    .legend-dot.testing { background: var(--amber); }
+    .legend-dot.exp     { background: var(--purple); }
+
+    /* ── Coming soon ── */
+    .coming-soon {
+      background: white;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 2.5rem;
+    }
+    .coming-soon h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .coming-soon-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .coming-soon-pill {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+    }
+
+    /* ── Sandbox ── */
+    .sandbox-section { margin-top: 1rem; }
+    .sandbox-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .sandbox-header h2 { font-size: 15px; font-weight: 600; }
+    .sandbox-dev-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: #ede9fe;
+      color: #5b21b6;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    .sandbox-desc { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+    .sandbox-wrap {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .sandbox-chrome {
+      background: #f3f4f6;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chrome-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .chrome-dot:nth-child(1) { background: #ff5f57; }
+    .chrome-dot:nth-child(2) { background: #febc2e; }
+    .chrome-dot:nth-child(3) { background: #28c840; }
+    .chrome-url {
+      flex: 1;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 10px;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin: 0 6px;
+    }
+    .sandbox-note {
+      font-size: 12px;
+      color: #92400e;
+      padding: 8px 14px;
+      background: #fffbeb;
+      border-bottom: 1px solid #fde68a;
+    }
+    .sandbox-input-area {
+      padding: 12px;
+      background: #f8f9fa;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sandbox-input-area label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+    .sandbox-input-area textarea {
+      width: 100%;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      resize: vertical;
+      color: var(--text);
+      background: white;
+    }
+    .sandbox-btns { display: flex; gap: 6px; }
+    .sandbox-btn {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+    }
+    .sandbox-btn.run { background: var(--accent); color: white; border-color: var(--accent); }
+    .sandbox-btn.run:hover { background: #004ec7; }
+    .sandbox-btn.clear { background: white; color: var(--muted); }
+    .sandbox-btn.clear:hover { background: var(--bg); }
+    iframe#sandbox { width: 100%; height: 480px; border: none; display: block; background: white; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 3rem;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    footer a { color: var(--muted); text-decoration: underline; }
+
     @media (max-width: 520px) {
       .topbar { padding: 0 1rem; }
       .tool-grid { grid-template-columns: 1fr; }
-      .howto { flex-direction: column; gap: 0.5rem; }
-      .legend { gap: 0.75rem; }
+      .howto { flex-direction: column; }
+      .hero h1 { font-size: 22px; }
     }
   </style>
 </head>
 <body>
 
 <div class="drag-tooltip" id="dragTooltip">
-  ↑ Drag the button to your Bookmarks Bar — then click it any time you're on a class page in Compass
+  ☝️ Drag this button to your Bookmarks Bar — then click it when you're on a Compass class page
 </div>
 
 <!-- Top bar -->
 <div class="topbar">
   <a href="https://compass.education" class="topbar-logo">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="24" height="24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="22" height="22">
       <path fill="#0057d9" d="M89.82,62.55a47.57,47.57,0,1,0,47.57,47.57A47.62,47.62,0,0,0,89.82,62.55Zm0,81.62a34.06,34.06,0,1,1,34.06-34A34.08,34.08,0,0,1,89.82,144.17Z"/>
       <path fill="#0057d9" d="M97.65,117l.14-.16.14-.16.13-.17.13-.17.12-.17c0-.06.08-.12.12-.17a1.88,1.88,0,0,0,.12-.18l.12-.18.11-.18.11-.19.1-.18a1.74,1.74,0,0,0,.1-.19l.1-.19.09-.19.09-.2a1.19,1.19,0,0,0,.08-.2l.09-.2c0-.06,0-.13.07-.2l.08-.2.06-.21a1.59,1.59,0,0,0,.07-.2l.06-.21.06-.21s0,0,0-.06l4.78-17.44L87.21,100h0l-.2,0-.22.06-.2.07-.21.07-.2.07-.2.08-.2.08-.2.09-.19.09-.2.09-.18.1-.2.1-.18.1-.18.11-.18.12-.18.11-.18.12-.17.12-.17.13a1.09,1.09,0,0,0-.17.13l-.16.13-.17.14-.16.14-.16.14-.15.14-.15.15-.15.16-.14.15a1.07,1.07,0,0,0-.14.16l-.15.16a1.83,1.83,0,0,1-.13.16l-.13.17a1.83,1.83,0,0,0-.13.16l-.13.18-.12.17-.12.18-.11.18a1.74,1.74,0,0,0-.11.18l-.11.18-.11.19-.09.19a1.14,1.14,0,0,0-.1.19l-.09.19-.09.2-.09.19c0,.07,0,.14-.08.2s0,.14-.08.2,0,.14-.07.21,0,.13-.07.2l-.06.21-.06.21-.06.21a.43.43,0,0,1,0,0L74.91,125l17.52-4.8h0l.21-.06.21-.06.21-.06.21-.07.2-.08.2-.07.2-.09.2-.08.19-.09.19-.1.19-.09.19-.1.19-.11.18-.11.18-.11.18-.11.17-.12.18-.13.17-.12.17-.13.16-.13.17-.14.15-.14.16-.14.16-.15.15-.15.15-.15.14-.15Z"/>
       <path fill="#0057d9" d="M89.8,55.77c-.62,0-1.23,0-1.85,0h-.27c-.54,0-1.08,0-1.61.09h-.2c-1.26.1-2.5.23-3.74.4h0c-1.63.23-3.24.53-4.83.91a1.87,1.87,0,0,1-.4,0A1.7,1.7,0,0,1,75.26,56l-2.6-9.73a1.71,1.71,0,0,1,1.24-2.1,66.92,66.92,0,0,1,7.48-1.35h0l.39,0,1.41-.15.65-.06,1.34-.1.68-.05,1.36-.06.64,0h.26l1.69,0h0c.57,0,1.13,0,1.69,0h.27l.63,0,1.36.06.68.05,1.34.1.65.06,1.41.15.39,0h0a66.52,66.52,0,0,1,7.48,1.35,1.71,1.71,0,0,1,1.25,2.1L104.34,56a1.7,1.7,0,0,1-1.64,1.26,1.72,1.72,0,0,1-.39,0c-1.6-.38-3.21-.68-4.84-.91h0c-1.24-.17-2.48-.3-3.73-.4h-.2l-1.62-.09h-.27c-.62,0-1.23,0-1.85,0Z"/>
     </svg>
     Compass
   </a>
-  <div class="topbar-divider"></div>
-  <div class="topbar-title">Power Tools</div>
+  <div class="topbar-sep"></div>
+  <span class="topbar-label">Power Tools</span>
   <div class="topbar-badge">Updated — Semester 1 2026</div>
 </div>
 
 <div class="page">
 
-  <!-- Page header -->
-  <div class="page-header">
-    <h1>Crusoe College — Compass Reporting Add Ons </h1>
-    <p>Browser bookmarklets that add features to Compass. All data stays between your browser and Compass — nothing is sent anywhere else.</p>
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-eyebrow">Crusoe College</div>
+    <h1>Compass Reporting Add Ons</h1>
+    <p>Browser bookmarklets that run inside Compass using your existing login. All data stays between your browser and Compass — nothing is sent anywhere else.</p>
   </div>
 
-  <!-- How-to -->
+  <!-- How to use -->
   <div class="howto">
     <div class="howto-icon">📌</div>
-    <div class="howto-text">
-      <strong>How to use:</strong> Drag any blue button to your Bookmarks Bar. Then open a class page in Compass and click the bookmark. If your bar isn't visible: <kbd>Menu</kbd> → <kbd>Bookmarks</kbd> → <kbd>Show Bookmarks Bar</kbd>.
+    <div class="howto-body">
+      <strong>How to use:</strong> Drag a blue button below to your Bookmarks Bar. Then open a class page in Compass and click the bookmark.
+      If your bar isn't visible: <kbd>Menu</kbd> → <kbd>Bookmarks</kbd> → <kbd>Show Bookmarks Bar</kbd>.
     </div>
   </div>
 
-  <!-- Setup complete notice -->
   <!-- Legend -->
   <div class="legend">
     <div class="legend-item"><div class="legend-dot stable"></div> Stable — ready to use</div>
@@ -474,41 +493,52 @@
     <div class="legend-item"><div class="legend-dot exp"></div> Experimental — use with care</div>
   </div>
 
-  <!-- STABLE TOOLS — only Class Dashboard and Reports Check visible -->
+  <!-- Stable tools -->
   <div class="section-label">Stable tools</div>
   <div class="tool-grid">
 
     <div class="tool-card stable">
+      <div class="tool-card-stripe"></div>
       <div class="tool-card-body">
         <div class="tool-card-name">Advisory Rubric Calculator</div>
-        <div class="tool-card-desc">Student-by-student summary: KATs, GPA, attendance, behaviour and extra-curricular scores at a glance.</div>
-        <div class="tool-card-status stable">● Stable</div>
+        <div class="tool-card-desc">Student-by-student summary showing KATs, GPA, attendance, behaviour and extra-curricular scores — colour coded 1–4 with a total rating.</div>
+        <div class="tool-card-tag stable">Stable</div>
       </div>
-      <div class="tool-card-footer">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=3';})();" class="bookmarklet">⭐ Advisory Rubric Calculator ⭐</a>
-        <span class="drag-hint">drag me</span>
+      <div class="tool-card-drag">
+        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=3';})();" class="bookmarklet">
+          <span class="bookmarklet-arrow">⇧</span> Advisory Rubric Calculator
+        </a>
+        <div class="drag-hint-text">
+          <strong>Drag to bookmarks</strong>
+          then click on a class page
+        </div>
       </div>
     </div>
 
     <div class="tool-card stable">
+      <div class="tool-card-stripe"></div>
       <div class="tool-card-body">
         <div class="tool-card-name">Reports Check 2.0</div>
-        <div class="tool-card-desc">Checks reports for missing elements, task naming, grading, and Excellence &amp; Endeavour recommendations. Year 7 &amp; 8 non-core subjects require a minimum of 2 tasks.</div>
-        <div class="tool-card-status stable">● Stable</div>
+        <div class="tool-card-desc">Checks reports for missing elements, task naming, grading setup, and Excellence & Endeavour recommendations. Grouped by setup issues and missing results.</div>
+        <div class="tool-card-tag stable">Stable</div>
       </div>
-      <div class="tool-card-footer">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/reports-check.js?v=2';})();" class="bookmarklet">⭐ Reports Check 2.0 ⭐</a>
-        <span class="drag-hint">drag me</span>
+      <div class="tool-card-drag">
+        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/reports-check.js?v=3';})();" class="bookmarklet">
+          <span class="bookmarklet-arrow">⇧</span> Reports Check 2.0
+        </a>
+        <div class="drag-hint-text">
+          <strong>Drag to bookmarks</strong>
+          then click on any Compass page
+        </div>
       </div>
     </div>
 
   </div>
 
-  <!-- More tools coming -->
-  <div class="coming-soon-box">
-    <h2>More tools coming soon</h2>
-    <p>The following tools are being reviewed and will be added here once tested at Crusoe College.</p>
-    <div class="coming-soon-list">
+  <!-- Coming soon -->
+  <div class="coming-soon">
+    <h3>More tools being reviewed for Crusoe College</h3>
+    <div class="coming-soon-pills">
       <span class="coming-soon-pill">Mixer-upper-er</span>
       <span class="coming-soon-pill">Guess Who?</span>
       <span class="coming-soon-pill">Birthdays</span>
@@ -524,95 +554,80 @@
     </div>
   </div>
 
-  <!-- SANDBOX -->
+  <!-- Sandbox -->
   <div class="sandbox-section">
     <div class="sandbox-header">
       <h2>Script Sandbox</h2>
-      <div class="badge-exp">Developer</div>
+      <div class="sandbox-dev-badge">Developer</div>
     </div>
-    <p class="sandbox-desc">Test a script directly below without touching your live Compass session. Paste JavaScript and run it in the isolated preview window.</p>
-
-    <div class="sandbox-frame-wrap">
-      <div class="sandbox-toolbar">
-        <div class="sandbox-toolbar-dot"></div>
-        <div class="sandbox-toolbar-dot"></div>
-        <div class="sandbox-toolbar-dot"></div>
-        <div class="sandbox-url-bar">
-          <span>sandbox</span> — isolated preview
+    <p class="sandbox-desc">Test a script without touching your live Compass session. Paste JavaScript and run it in the isolated preview below. API calls will fail here — use this for UI layout and logic testing only.</p>
+    <div class="sandbox-wrap">
+      <div class="sandbox-chrome">
+        <div class="chrome-dot"></div>
+        <div class="chrome-dot"></div>
+        <div class="chrome-dot"></div>
+        <div class="chrome-url"><span style="color:var(--accent)">sandbox</span> — isolated preview</div>
+      </div>
+      <div class="sandbox-note">⚠️ Sandbox is isolated from Compass — API calls will fail. UI and logic testing only.</div>
+      <div class="sandbox-input-area">
+        <label>Paste script to test</label>
+        <textarea id="sandboxInput" rows="6" placeholder="// Paste your .js script here&#10;console.log('Hello from sandbox')"></textarea>
+        <div class="sandbox-btns">
+          <button class="sandbox-btn run" onclick="runSandbox()">▶ Run</button>
+          <button class="sandbox-btn clear" onclick="clearSandbox()">Clear</button>
         </div>
       </div>
-      <div class="sandbox-note">
-        ⚠️ The sandbox is isolated from Compass — API calls will fail here. Use this to test UI layout and logic only.
-      </div>
-      <div style="padding:1rem; background:#f8f9fa; border-bottom:1px solid var(--border); display:flex; gap:0.5rem; align-items:flex-start; flex-direction:column;">
-        <label style="font-size:12px; font-weight:600; color:var(--muted);">Paste script to test</label>
-        <textarea id="sandboxInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; padding:0.5rem; border:1px solid var(--border); border-radius:0.4rem; resize:vertical; color:var(--text);" placeholder="// Paste your .js script here and click Run&#10;console.log('Hello from sandbox')"></textarea>
-        <div style="display:flex; gap:0.5rem;">
-          <button onclick="runSandbox()" style="font-size:13px; font-weight:500; background:var(--accent); color:white; border:none; border-radius:0.4rem; padding:0.4rem 1rem; cursor:pointer;">▶ Run</button>
-          <button onclick="clearSandbox()" style="font-size:13px; font-weight:500; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:0.4rem; padding:0.4rem 1rem; cursor:pointer;">Clear</button>
-        </div>
-      </div>
-      <iframe id="sandbox" sandbox="allow-scripts" srcdoc="<html><body style='font-family:sans-serif;padding:1rem;color:#6b7280;font-size:13px;'>Run a script above to see output here.</body></html>"></iframe>
+      <iframe id="sandbox" sandbox="allow-scripts" srcdoc="<html><body style='font-family:sans-serif;padding:1rem;color:#9ca3af;font-size:13px;'>Run a script above to see output here.</body></html>"></iframe>
     </div>
   </div>
 
   <!-- Footer -->
   <footer>
     <span>Crusoe College — Compass Power Tools — Semester 1, 2026</span>
-    <span>MIT License · <a href="https://github.com/drewkerr/compass" target="_blank">Original source on GitHub</a></span>
+    <span>MIT License · <a href="https://github.com/crusoeapps/compassaddons" target="_blank">github.com/crusoeapps/compassaddons</a></span>
   </footer>
 
 </div>
 
 <script>
-  // Show drag tooltip on bookmarklet hover
-  var bookmarklets = document.querySelectorAll('.bookmarklet')
+  // Drag tooltip
   var tooltip = document.getElementById('dragTooltip')
-  bookmarklets.forEach(function(btn) {
-    btn.addEventListener('mouseenter', function() { tooltip.classList.add('visible') })
-    btn.addEventListener('mouseleave', function() { tooltip.classList.remove('visible') })
+  document.querySelectorAll('.bookmarklet').forEach(function(btn) {
+    btn.addEventListener('mouseenter', function() { tooltip.classList.add('show') })
+    btn.addEventListener('mouseleave', function() { tooltip.classList.remove('show') })
     btn.addEventListener('click', function(e) {
       e.preventDefault()
-      alert('Drag this button to your Bookmarks Bar — then click it when you\'re on a Compass class page.')
+      tooltip.classList.remove('show')
+      alert('Drag this button to your Bookmarks Bar, then click it when you\'re on a Compass class page.')
     })
   })
 
-  // Sandbox runner
+  // Sandbox
   function runSandbox() {
     var code = document.getElementById('sandboxInput').value.trim()
     if (!code) return
     var html = [
       '<html><head>',
-      '<style>body{font-family:sans-serif;font-size:13px;padding:1rem;color:#1a1d23}',
-      'pre{background:#f3f4f6;padding:0.75rem;border-radius:0.4rem;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;}',
-      '.err{color:#dc2626;background:#fef2f2;}</style></head><body>',
-      '<div id="output"></div>',
+      '<style>body{font-family:sans-serif;font-size:13px;padding:1rem;color:#111827;}',
+      'pre{background:#f3f4f6;padding:.75rem;border-radius:.4rem;font-size:12px;white-space:pre-wrap;word-break:break-all;margin-bottom:.5rem;}',
+      '.err{background:#fef2f2;color:#dc2626;}</style></head><body>',
+      '<div id="out"></div>',
       '<scr'+'ipt>',
-      'var _log=console.log.bind(console);',
-      'console.log=function(){',
-      '  var el=document.createElement("pre");',
-      '  el.textContent=Array.from(arguments).map(function(a){return typeof a==="object"?JSON.stringify(a,null,2):String(a)}).join(" ");',
-      '  document.getElementById("output").appendChild(el);',
-      '  _log.apply(console,arguments);',
-      '};',
-      'try{',
-      code,
-      '}catch(e){',
-      '  var el=document.createElement("pre");',
-      '  el.className="err";',
-      '  el.textContent="❌ Error: "+e.message;',
-      '  document.getElementById("output").appendChild(el);',
-      '}',
+      'var _l=console.log.bind(console);',
+      'console.log=function(){var e=document.createElement("pre");',
+      'e.textContent=Array.from(arguments).map(function(a){return typeof a==="object"?JSON.stringify(a,null,2):String(a)}).join(" ");',
+      'document.getElementById("out").appendChild(e);_l.apply(console,arguments)};',
+      'try{',code,
+      '}catch(e){var x=document.createElement("pre");x.className="err";',
+      'x.textContent="❌ "+e.message;document.getElementById("out").appendChild(x);}',
       '</'+'script></body></html>'
-    ].join('\n')
+    ].join('')
     document.getElementById('sandbox').srcdoc = html
   }
-
   function clearSandbox() {
     document.getElementById('sandboxInput').value = ''
-    document.getElementById('sandbox').srcdoc = "<html><body style='font-family:sans-serif;padding:1rem;color:#6b7280;font-size:13px;'>Cleared. Paste a script above and click Run.</body></html>"
+    document.getElementById('sandbox').srcdoc = "<html><body style='font-family:sans-serif;padding:1rem;color:#9ca3af;font-size:13px;'>Cleared.</body></html>"
   }
 </script>
-
 </body>
 </html>
