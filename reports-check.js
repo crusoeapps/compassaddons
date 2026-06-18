@@ -25,9 +25,11 @@ $(document).ready(function() {
   var CORE_SUBJECTS = ['English', 'Mathematics', 'Humanities', 'Science', 'Physical Education']
 
   function detectYearLevel(subjectName, activityName) {
-    var subjectMatch = subjectName.match(/^Year\s+([78])\b/i)
+    // From subject name: "Year 7...", "Year 10..."
+    var subjectMatch = subjectName.match(/^Year\s+(\d+)\b/i)
     if (subjectMatch) return parseInt(subjectMatch[1])
-    var activityMatch = activityName.match(/^([78])[A-Z]/i)
+    // From activity code: "7A", "8MATA", "9ENG", "10SCI" etc.
+    var activityMatch = activityName.match(/^(\d{1,2})[A-Z]/i)
     if (activityMatch) return parseInt(activityMatch[1])
     return null
   }
@@ -35,6 +37,8 @@ $(document).ready(function() {
   var HIGH_TASKS_SUBJECTS = ['English', 'Mathematics']
 
   function getMinTasks(subjectName, activityName) {
+    // Advisory classes have no minimum task requirement
+    if (/advisory/i.test(subjectName) || /advisory/i.test(activityName)) return 0
     var yr = detectYearLevel(subjectName, activityName)
     if (yr !== 7 && yr !== 8) return 3
     // English and Mathematics Yr 7 & 8 require 4 tasks
@@ -401,6 +405,91 @@ $(document).ready(function() {
     #dash .rc-issue-sev.warning { background: #fef3c7; color: #92400e; }
     #dash .rc-issue-sev.info    { background: #f3f4f6; color: #6b7280; }
 
+    /* ── Two-column issue summary (Option C) ── */
+    #dash .rc-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #dash .rc-summary-group {
+      border: 1px solid #e2e5ea;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #dash .rc-summary-group-hdr {
+      padding: 7px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-bottom: 1px solid #e2e5ea;
+    }
+    #dash .rc-summary-group.sg-lt .rc-summary-group-hdr {
+      background: #eff6ff;
+      border-bottom-color: #bfdbfe;
+      color: #1d40ae;
+    }
+    #dash .rc-summary-group.sg-sem .rc-summary-group-hdr {
+      background: #f0fdf4;
+      border-bottom-color: #bbf7d0;
+      color: #15803d;
+    }
+    #dash .rc-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-bottom: 1px solid #f9fafb;
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    #dash .rc-summary-row:last-child { border-bottom: none; }
+    #dash .rc-summary-row:hover { background: #f9fafb; }
+    #dash .rc-summary-row-label {
+      flex: 1;
+      color: #374151;
+      line-height: 1.4;
+    }
+    #dash .rc-summary-row-label .rc-sr-task {
+      font-size: 10px;
+      color: #9ca3af;
+      display: block;
+    }
+    #dash .rc-summary-count {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+    #dash .rc-summary-count.cnt-r { background: #fee2e2; color: #991b1b; }
+    #dash .rc-summary-count.cnt-w { background: #fef3c7; color: #92400e; }
+    #dash .rc-summary-count.cnt-g { background: #dcfce7; color: #15803d; }
+    #dash .rc-detail-panel {
+      display: none;
+      border-top: 1px solid #f3f4f6;
+      background: #fafafa;
+    }
+    #dash .rc-detail-panel.open { display: block; }
+    #dash .rc-detail-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 4px 10px 4px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.4;
+    }
+    #dash .rc-detail-item:last-child { border-bottom: none; }
+    #dash .rc-detail-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #dc2626;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+
     /* ── Excend ── */
     #dash .rc-excend {
       border: 1px solid #bbf7d0;
@@ -555,7 +644,9 @@ $(document).ready(function() {
   $('<div>').addClass('rc-rule-note').html(
     '📋 <strong>Task minimums:</strong> Yr 7/8 English &amp; Mathematics = min <strong>4</strong> tasks. ' +
     'Yr 7/8 other core subjects (Humanities, Science, Physical Education) = min <strong>3</strong> tasks. ' +
-    'Yr 7/8 non-core subjects = min <strong>2</strong> tasks. Yr 9+ = min <strong>3</strong> tasks. ' +
+    'Yr 7/8 non-core subjects = min <strong>2</strong> tasks. ' +
+    'Yr 9 &amp; 10 = min <strong>3</strong> tasks (KATs + Semester Exam included). ' +
+    'REAL classes and Advisory are excluded from all checks. ' +
     '&nbsp;|&nbsp; ⚠️ Tasks must be assigned to <strong>Subjects</strong>, not Classes.'
   ).appendTo(body)
 
@@ -681,7 +772,11 @@ $(document).ready(function() {
 
   function loadActivities(data, userId, cycleId, staffBody, pill, pf) {
     var filtered = data.d.filter(function(a) {
-      return !(a.subjectName === "Advisory" || a.subjectName === "YDuties" || a.subjectName === "YDBUS")
+      // Exclude admin/advisory subjects
+      if (a.subjectName === "Advisory" || a.subjectName === "YDuties" || a.subjectName === "YDBUS") return false
+      // Exclude REAL classes/subjects — no KATs or VC levels required
+      if (/REAL/i.test(a.subjectName) || /REAL/i.test(a.activityName)) return false
+      return true
     })
     var total = filtered.length, count = 0
     var hasError = false, hasWarning = false
@@ -715,35 +810,100 @@ $(document).ready(function() {
       var elemDiv  = $('<div>').appendTo(actHdr)
 
       var actBody  = $('<div>').addClass('rc-activity-body').appendTo(actDiv)
-      var issueGrps = $('<div>').addClass('rc-issue-groups').appendTo(actBody)
+      // ── Option C: two-column summary layout ──────────────────────────────
+      var twoCol = $('<div>').addClass('rc-two-col').appendTo(actBody)
 
-      // ── Issue group factory ──
-      function makeGroup(id, type, label) {
-        var grp = $('<div>').addClass(`rc-issue-group group-${type}`).attr('id', id).appendTo(issueGrps)
-        var ghdr = $('<div>').addClass('rc-issue-group-header').click(function() {
-          grp.toggleClass('open')
-        }).appendTo(grp)
-        $('<span>').text(label).appendTo(ghdr)
-        var badge = $('<span>').addClass('rc-group-badge').text('0').appendTo(ghdr)
-        var gbody = $('<div>').addClass('rc-issue-group-body').appendTo(grp)
+      // Left column: Compass Learning Task issues
+      var ltGroup = $('<div>').addClass('rc-summary-group sg-lt').appendTo(twoCol)
+      $('<div>').addClass('rc-summary-group-hdr').text('Compass Learning Task issues').appendTo(ltGroup)
+      var ltRows = $('<div>').appendTo(ltGroup)
+
+      // Right column: Semester Reporting issues
+      var semGroup = $('<div>').addClass('rc-summary-group sg-sem').appendTo(twoCol)
+      $('<div>').addClass('rc-summary-group-hdr').text('Semester Reporting issues').appendTo(semGroup)
+      var semRows = $('<div>').appendTo(semGroup)
+
+      // ── Summary row factory ──────────────────────────────────────────────
+      // Creates a collapsible summary row showing field/task + count badge
+      // that expands to list individual student/detail items
+      function makeSummaryRow(container, label, subLabel, severity) {
+        var row = $('<div>').addClass('rc-summary-row').appendTo(container)
+        var labelDiv = $('<div>').addClass('rc-summary-row-label').appendTo(row)
+        $('<span>').text(label).appendTo(labelDiv)
+        if (subLabel) $('<span>').addClass('rc-sr-task').text(subLabel).appendTo(labelDiv)
+        var cntClass = severity === 'error' ? 'cnt-r' : severity === 'warning' ? 'cnt-w' : 'cnt-g'
+        var cnt = $('<span>').addClass('rc-summary-count ' + cntClass).text('0').appendTo(row)
+        var detail = $('<div>').addClass('rc-detail-panel').appendTo(container)
+        row.click(function() { detail.toggleClass('open') })
         return {
-          grp: grp,
-          badge: badge,
-          body: gbody,
           count: 0,
-          add: function(text, sev) {
+          cnt: cnt,
+          detail: detail,
+          add: function(text) {
             this.count++
-            badge.text(this.count)
-            grp.addClass('open')
-            var row = $('<div>').addClass('rc-issue-item').appendTo(gbody)
-            $('<span>').addClass(`rc-issue-sev ${sev}`).text(sev).appendTo(row)
-            $('<div>').text(text).appendTo(row)
+            cnt.text(this.count)
+            var item = $('<div>').addClass('rc-detail-item').appendTo(detail)
+            $('<div>').addClass('rc-detail-dot').appendTo(item)
+            $('<div>').text(text).appendTo(item)
           }
         }
       }
 
-      var setupGroup   = makeGroup(`grp-setup-${entityId}`,   'setup',   'Setup Issues')
-      var resultsGroup = makeGroup(`grp-results-${entityId}`, 'results', 'Task Results Missing')
+      // ── Adapters so existing code still works ────────────────────────────
+      // setupGroup → LT issues column
+      // resultsGroup → Semester reporting column
+      // Each gets a .add(text, sev) that routes to a summary row per unique label
+
+      var ltSummaryRows = {}   // keyed by label
+      var semSummaryRows = {}
+
+      var setupGroup = {
+        count: 0,
+        add: function(text, sev) {
+          this.count++
+          // Parse label from text: "Task X 'name': issue" → label=issue, sub=task name
+          var taskMatch = text.match(/^(Task \d+ '[^']+'):\s*(.+)/)
+          var label, sub
+          if (taskMatch) {
+            sub  = taskMatch[1]
+            label = taskMatch[2].split(' — ')[0].substring(0, 45)
+          } else {
+            label = text.split(' — ')[0].substring(0, 45)
+            sub   = null
+          }
+          var key = label + '|' + (sub || '')
+          if (!ltSummaryRows[key]) {
+            ltSummaryRows[key] = makeSummaryRow(ltRows, label, sub, sev)
+          }
+          ltSummaryRows[key].add(text)
+          markSeverity(sev)
+        }
+      }
+
+      var resultsGroup = {
+        count: 0,
+        add: function(text, sev) {
+          this.count++
+          // Parse: "Task X 'name': results missing for STUDENT" → label=task name
+          var taskMatch = text.match(/^(Task \d+ '[^']+'):\s*results missing for (.+)/)
+          var label, sub
+          if (taskMatch) {
+            label = 'Results missing'
+            sub   = taskMatch[1]
+          } else {
+            // Report field: "STUDENT — 'FIELD' is missing"
+            var fieldMatch = text.match(/'([^']+)' is missing/)
+            label = fieldMatch ? fieldMatch[1] + ' missing' : text.substring(0, 40)
+            sub   = null
+          }
+          var key = label + '|' + (sub || '')
+          if (!semSummaryRows[key]) {
+            semSummaryRows[key] = makeSummaryRow(semRows, label, sub, sev)
+          }
+          semSummaryRows[key].add(text)
+          markSeverity(sev)
+        }
+      }
 
       // Severity tracker
       function markSeverity(sev) {
@@ -760,9 +920,9 @@ $(document).ready(function() {
       var storedTaskData, storedReportData, storedEnrolments, storedElemDiv, storedExcBody
 
       function renderIssues() {
-        // Clear groups
-        setupGroup.body.empty(); setupGroup.count = 0; setupGroup.badge.text('0')
-        resultsGroup.body.empty(); resultsGroup.count = 0; resultsGroup.badge.text('0')
+        // Clear summary rows
+        ltRows.empty(); ltSummaryRows = {}; setupGroup.count = 0
+        semRows.empty(); semSummaryRows = {}; resultsGroup.count = 0
         dot.removeClass('dot-red dot-amber').addClass('dot-blue')
         katsDiv.empty(); elemDiv.empty()
 
@@ -773,17 +933,11 @@ $(document).ready(function() {
         if (!dot.hasClass('dot-red') && !dot.hasClass('dot-amber')) {
           dot.removeClass('dot-blue').addClass('dot-green')
         }
-        // Hide empty groups
-        if (setupGroup.count === 0) {
-          setupGroup.grp.hide()
-        } else {
-          setupGroup.grp.show()
-        }
-        if (resultsGroup.count === 0) {
-          resultsGroup.grp.hide()
-        } else {
-          resultsGroup.grp.show()
-        }
+        // Hide empty columns
+        ltGroup.toggle(setupGroup.count > 0)
+        semGroup.toggle(resultsGroup.count > 0)
+        // If both empty, hide the whole two-col container
+        twoCol.toggle(setupGroup.count > 0 || resultsGroup.count > 0)
       }
 
       actDiv.data('rerender', renderIssues)
@@ -798,7 +952,24 @@ $(document).ready(function() {
           ))) return
 
           katCount++
-          var kat = $('<div>').addClass('rc-kat').text(`Task ${katCount}`).attr('title', t.name).appendTo(katsDiv)
+          // Smart pill label: detect task type from name
+          function getTaskLabel(name, num) {
+            if (/^Structured Homework Program/i.test(name)) {
+              var termMatch = name.match(/Term\s*(\d)/i)
+              return termMatch ? 'HW T' + termMatch[1] : 'Homework'
+            }
+            if (/^Semester Exam/i.test(name)) return 'Exam: ' + name.replace(/^Semester Exam\s*/i, '').substring(0, 18).trim()
+            if (/^Key Assessment Task/i.test(name)) {
+              var rest = name.replace(/^Key Assessment Task\s*/i, '')
+              return 'KAT: ' + rest.substring(0, 20).trim()
+            }
+            if (/^Unit/i.test(name)) return 'Unit: ' + name.replace(/^Unit\s*/i, '').substring(0, 20).trim()
+            if (/^SAC/i.test(name)) return 'SAC: ' + name.replace(/^SAC\s*/i, '').substring(0, 20).trim()
+            if (/^Structured/i.test(name)) return 'Struct: ' + name.replace(/^Structured\s*/i, '').substring(0, 18).trim()
+            return name.substring(0, 22).trim()
+          }
+          var pillLabel = getTaskLabel(t.name, katCount)
+          var kat = $('<div>').addClass('rc-kat').text(pillLabel).attr('title', t.name).appendTo(katsDiv)
 
           function setupErr(msg) {
             setupGroup.add(msg, 'error')
@@ -853,13 +1024,59 @@ $(document).ready(function() {
             setupInfo(`Task ${katCount} '${t.name}': no due date — edit Learning Task and add Due Date`)
           }
 
-          // Results missing (goes in results group)
+          // Detect task type for contextual checks
+          var isExamTask = /^Semester Exam/i.test(t.name)
+          var isKATtask  = /^Key Assessment Task/i.test(t.name)
+
+          // Results missing / Not Assessed / Absent checks
           $.each(t.students, function() {
-            if (!this.results.length && classlist && classlist.includes(this.userId)) {
-              resultsGroup.add(`Task ${katCount} '${t.name}': results missing for ${this.userName}`, 'error')
+            var student = this
+            if (!student.results.length && classlist && classlist.includes(student.userId)) {
+              resultsGroup.add(`${pillLabel} '${t.name}': results missing for ${student.userName}`, 'error')
               if (!kat.hasClass('error')) kat.addClass('error')
               markSeverity('error')
+              return
             }
+
+            // Check result values for Not Assessed / Absent
+            $.each(student.results, function() {
+              var val = (this.value || '').toString().trim()
+              var display = (this.displayValue || '').toString().trim()
+              var checkVal = val || display
+
+              // KAT graded "Not Assessed" — warning
+              if (isKATtask && (checkVal === 'Not Assessed' || display === 'Not Assessed')) {
+                setupGroup.add(
+                  `${pillLabel} '${t.name}': ${student.userName} is graded "Not Assessed" — please check if this is correct`,
+                  'warning'
+                )
+                if (!kat.hasClass('error')) kat.addClass('warning')
+                markSeverity('warning')
+                return false // only flag once per student per task
+              }
+
+              // Semester Exam graded "Absent" — warning
+              if (isExamTask && (checkVal === 'Absent' || display === 'Absent')) {
+                setupGroup.add(
+                  `${pillLabel} '${t.name}': ${student.userName} is marked "Absent" — check if this is correct`,
+                  'warning'
+                )
+                if (!kat.hasClass('error')) kat.addClass('warning')
+                markSeverity('warning')
+                return false
+              }
+
+              // Semester Exam graded "Not Assessed" — check for exam exemption
+              if (isExamTask && (checkVal === 'Not Assessed' || display === 'Not Assessed')) {
+                setupGroup.add(
+                  `${pillLabel} '${t.name}': ${student.userName} is graded "Not Assessed" — check if this student is exempt from exams`,
+                  'warning'
+                )
+                if (!kat.hasClass('error')) kat.addClass('warning')
+                markSeverity('warning')
+                return false
+              }
+            })
           })
         })
 
@@ -904,7 +1121,7 @@ $(document).ready(function() {
             if (fieldName === 'Classes Attended' || fieldName === 'Classes Not Present') return
 
             if (!this.value || (this.itemName == "Award" && this.value == "None")) {
-              setupGroup.add(`${studentName} — '${fieldName}' is missing`, 'error')
+              resultsGroup.add(`${studentName} — '${fieldName}' is missing`, 'error')
               elemPill.removeClass('complete').addClass('error').text('Incomplete')
               markSeverity('error')
             }
