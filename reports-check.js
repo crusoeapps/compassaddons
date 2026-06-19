@@ -1167,9 +1167,10 @@ $(document).ready(function() {
 
             // Headline grade can appear on a few different field names
             // depending on task/grading-scheme type — check defensively.
+            var studentResults = student.results || []
             var headlineGrade = (
               student.result || student.grade || student.displayValue ||
-              (student.results[0] || {}).displayValue || ''
+              (studentResults[0] || {}).displayValue || ''
             ).toString().trim()
 
             // KAT graded "Not Assessed" — ERROR, checkable, left column (Learning Task issues)
@@ -1210,7 +1211,7 @@ $(document).ready(function() {
 
             // Only NOW treat empty results as genuinely missing — i.e. no
             // headline grade at all (not Not Assessed, not Absent, nothing).
-            if (!student.results.length && !headlineGrade) {
+            if (!studentResults.length && !headlineGrade) {
               resultsGroup.add(`${pillLabel} '${t.name}': results missing for ${student.userName}`, 'error')
               if (!kat.hasClass('error')) kat.addClass('error')
               markSeverity('error')
@@ -1405,9 +1406,10 @@ $(document).ready(function() {
 
         // Same headline-grade lookup as the Setup Issues check, since
         // Not Assessed / Absent tasks leave results[] empty in Compass.
+        var studentResults = student.results || []
         var headlineGrade = (
           student.result || student.grade || student.displayValue ||
-          (student.results[0] || {}).displayValue || ''
+          (studentResults[0] || {}).displayValue || ''
         ).toString().trim()
 
         s.taskResults.push({ name: t.name, grade: headlineGrade || '—' })
@@ -1416,7 +1418,7 @@ $(document).ready(function() {
           s.disqualified = true
         }
 
-        var hasResult = student.results.length > 0 || headlineGrade
+        var hasResult = studentResults.length > 0 || headlineGrade
         if (!hasResult) {
           s.allSubmitted = false
           s.allOnTime = false
