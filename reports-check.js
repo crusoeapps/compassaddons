@@ -1134,8 +1134,16 @@ $(document).ready(function() {
           if (!hasValidTaskPrefix(t.name)) {
             setupWarn(`Task ${katCount}: '${t.name}' does not follow naming format — edit Learning Task > Name`)
           }
-          if (!hasValidTaskPrefix(t.taskTitleOnReport)) {
-            setupWarn(`Task ${katCount}: title on report '${t.taskTitleOnReport}' does not follow naming format — edit Learning Task > Reporting > Title on Report`)
+          // taskTitleOnReport is genuinely optional in Compass — a task that
+          // has never had "Title on Report" set will have this as undefined.
+          // Defaulting to '' lets the naming-format and colon checks below
+          // run safely AND correctly flag the missing title as an issue,
+          // instead of throwing and silently aborting the whole function
+          // (which previously meant NOTHING after this point ever rendered,
+          // including Excellence & Endeavour for the whole class).
+          var titleOnReport = t.taskTitleOnReport || ''
+          if (!hasValidTaskPrefix(titleOnReport)) {
+            setupWarn(`Task ${katCount}: title on report '${titleOnReport || '(blank)'}' does not follow naming format — edit Learning Task > Reporting > Title on Report`)
           }
           if (t.includeInOverall) {
             setupWarn(`Task ${katCount} '${t.name}': is emphasised — edit Learning Task > Reporting and untick Emphasise in Task Summary`)
@@ -1143,7 +1151,7 @@ $(document).ready(function() {
           if (t.showTaskDueDates) {
             setupWarn(`Task ${katCount} '${t.name}': shows due date on report — edit Learning Task > Reporting and untick Display Task Due Dates`)
           }
-          if (t.name.includes(" : ") || t.taskTitleOnReport.includes(" : ")) {
+          if (t.name.includes(" : ") || titleOnReport.includes(" : ")) {
             setupInfo(`Task ${katCount}: space before colon — edit Learning Task and fix`)
           }
           if (!t.dueDateTimestamp) {
