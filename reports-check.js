@@ -568,6 +568,21 @@ $(document).ready(function() {
       background: #dcfce7;
       color: #15803d;
     }
+    #dash .rc-excend-note {
+      font-size: 11px;
+      color: #92400e;
+      background: #fffbeb;
+      border-top: 1px solid #fde68a;
+      padding: 8px 12px;
+      line-height: 1.5;
+    }
+    #dash .rc-excend-note code {
+      font-family: monospace;
+      font-size: 10.5px;
+      background: #fef3c7;
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
 
     /* ── Load all btn ── */
     #dash .rc-load-all {
@@ -1209,7 +1224,11 @@ $(document).ready(function() {
       // ── Main data fetch ──
       var excend  = $('<div>').addClass('rc-excend').appendTo(actBody)
       var exHdr   = $('<div>').addClass('rc-excend-header').click(function() { excend.toggleClass('open') }).appendTo(excend)
-      $('<span>').text('Excellence & Endeavour').appendTo(exHdr)
+      $('<span>').text('Excellence & Endeavour').attr('title',
+        'Excellence: GPA 3.75+ AND all KATs submitted on time AND graded "Working Above Expected Level" or higher.\n' +
+        'Endeavour: GPA 3.75+ AND all KATs submitted (timing/grade not required).\n' +
+        'Excellence supersedes Endeavour.'
+      ).appendTo(exHdr)
       $('<span>').text('▶').css({ fontSize: '9px' }).appendTo(exHdr)
       var excBody = $('<div>').addClass('rc-excend-body').appendTo(excend)
 
@@ -1223,7 +1242,7 @@ $(document).ready(function() {
 
           $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
           renderIssues()
-          loadExcend(results[0], activityId, cycleId, excBody)
+          loadExcend(results[0], tasks[0], activityId, cycleId, excBody)
         }).done(function() {
           count++
           pf.css('width', (count / total * 100) + '%')
@@ -1253,21 +1272,14 @@ $(document).ready(function() {
   }
 
   // ── GPA ───────────────────────────────────────────────────────────────────
-  function getGPA(entityId, cycleId) {
-    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
-      data: JSON.stringify({ cycleId: cycleId, entityId: entityId, editing: false }),
+  // Ready to Learn GPA — same source and same "latest cycle" logic used by
+  // the Advisory Rubric Calculator (GetOverallGraphData), so award decisions
+  // here always agree with the GPA shown on that dashboard.
+  function getGPA(userId) {
+    return $.ajax("/Services/Gpa.svc/GetOverallGraphData", {
+      data: JSON.stringify({ userId: userId }),
       contentType: 'application/json', type: 'POST'
     })
-  }
-  function loadGPA(results, userId) {
-    try {
-      return results.d.entities
-        .filter(s => s.id == userId)[0]
-        .results.map(r => [r.result, results.d.aoas.filter(a => a.id == r.id)])
-        .map(a => a[1][0].options.filter(b => b.id == a[0]))
-        .map(a => a[0].value)
-        .filter(x => x)
-    } catch { return false }
   }
 
   function getEnrolments(activityId) {
@@ -1285,49 +1297,114 @@ $(document).ready(function() {
     })
   }
 
-  // ── Excend (separate from report issues) ─────────────────────────────────
-  function loadExcend(results, activityId, cycleId, excBody) {
-    var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
-    getGPA(activityId, GPAcycleId).always(function(gpas) {
-      $.each(results.d.entities, function() {
-        var studentName = this.name
-        var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
-        $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
-        var gp = [], ex = [], en = true
-        $.each(this.results, function() {
-          if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
-            var abbr = (this.displayValue.match(/\b([A-Z])/g) || [this.displayValue]).join('')
-            $('<div>').text(abbr).attr('title', this.displayValue).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-            ex.push(
-              this.displayValue == "Working Well Above Expected Level" ||
-              this.displayValue == "Working Above Expected Level" ||
-              this.displayValue == "Working At Expected Level" ||
-              this.displayValue == "Excellent" ||
-              parseInt(this.displayValue) >= 50 ||
-              (this.displayValue == "Absent" && this.itemName == "Semester Exam")
-            )
-          }
-          if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") en = false
-          if (this.itemName == "Work Habits") {
-            switch (this.value) {
-              case "Consistently": gp.push(4); break
-              case "Usually":      gp.push(3); break
-              case "Sometimes":    gp.push(2); break
-              case "Rarely":       gp.push(1); break
-            }
-          }
-        })
-        gp = gp.length ? gp : loadGPA(gpas, this.id)
-        var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length).toFixed(2) : "NA"
-        $('<div>').text(`GPA ${gpa}`).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-        if (gpa >= 3.75 && en) {
-          var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
-          $('<div>').addClass('rc-excend-award').text(award).appendTo(row)
-        } else {
-          $('<div>').appendTo(row)
+  // ── Excellence & Endeavour ────────────────────────────────────────────────
+  // Award criteria (per the school's published rubric):
+  //
+  //              | Excellence Award              | Endeavour Award
+  //  ------------|--------------------------------|---------------------------
+  //  Ready to    | 3.75 or more                   | 3.75 or more
+  //  Learn GPA   |                                |
+  //  ------------|--------------------------------|---------------------------
+  //  Key         | ALL KATs submitted ON TIME      | ALL KATs submitted
+  //  Assessment  | AND graded "Working Above       | (timing/grade not
+  //  Tasks       | Expected Level" or higher       | considered further)
+  //
+  // GPA comes from the same source as the Advisory Rubric Calculator
+  // (Ready to Learn GPA via GetOverallGraphData, latest cycle) so the two
+  // tools never disagree on a student's GPA.
+  // Excellence supersedes Endeavour — a student meeting both sets of
+  // criteria is only ever awarded Excellence, never both.
+
+  var HIGH_GRADE_VALUES = ['Working Well Above Expected Level', 'Working Above Expected Level']
+
+  function isHighGrade(displayValue) {
+    return HIGH_GRADE_VALUES.includes((displayValue || '').trim())
+  }
+
+  // KAT submission status codes (matches class-dashboard.js):
+  // 1 = pending, 2 = overdue, 3 = on time, 4 = late
+  function isOnTimeStatus(status) { return status === 3 }
+
+  function loadExcend(results, tasks, activityId, cycleId, excBody) {
+    // Build per-student KAT submission + grade summary from the same task
+    // data already used for the Setup Issues / Results Missing checks —
+    // no separate fetch needed.
+    var katSummary = {} // userId -> { allSubmitted, allOnTime, allHighGrade, total }
+
+    $.each(tasks.d.data, function() {
+      var t = this
+      if (!t.includeInSemesterReports) return
+      var isExamTask = /^Semester Exam/i.test(t.name)
+
+      $.each(t.students, function() {
+        var student = this
+        var uid = student.userId
+        if (!katSummary[uid]) {
+          katSummary[uid] = { allSubmitted: true, allOnTime: true, allHighGrade: true, total: 0 }
+        }
+        var s = katSummary[uid]
+        s.total++
+
+        var hasResult = student.results.length > 0
+        if (!hasResult) {
+          s.allSubmitted = false
+          s.allOnTime = false
+          s.allHighGrade = false
+          return
+        }
+
+        // Submission timing — Semester Exams use the same custom-due-date
+        // tolerance as the Advisory Rubric Calculator (overdue/late treated
+        // as on time, since the field doesn't reflect per-student due dates).
+        var onTime = isExamTask ? true : isOnTimeStatus(student.submissionStatus)
+        if (!onTime) s.allOnTime = false
+
+        // Grade check — only meaningful for KATs that carry a displayed grade
+        var grade = (student.results[0] || {}).displayValue
+        if (!isHighGrade(grade)) s.allHighGrade = false
+      })
+    })
+
+    $.each(results.d.entities, function() {
+      var studentName = this.name
+      var userId = this.id
+      var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
+      $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
+
+      var summary = katSummary[userId] || { allSubmitted: false, allOnTime: false, allHighGrade: false, total: 0 }
+      var allKatsSubmitted     = summary.total > 0 && summary.allSubmitted
+      var allKatsOnTime        = allKatsSubmitted && summary.allOnTime
+      var allKatsHighGrade     = allKatsSubmitted && summary.allHighGrade
+
+      var gpaCell = $('<div>').css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
+
+      getGPA(userId).always(function(cycles) {
+        var gpa = null
+        if (cycles && cycles.d && cycles.d.length) {
+          gpa = cycles.d[cycles.d.length - 1].score
+        }
+        gpaCell.text(gpa !== null ? `GPA ${gpa.toFixed(2)}` : 'GPA NA')
+
+        var gpaMeetsBar = gpa !== null && gpa >= 3.75
+        var award = null
+        if (gpaMeetsBar && allKatsOnTime && allKatsHighGrade) {
+          award = 'Excellence'
+        } else if (gpaMeetsBar && allKatsSubmitted) {
+          award = 'Endeavour'
+        }
+
+        var awardCell = $('<div>').appendTo(row)
+        if (award) {
+          awardCell.addClass('rc-excend-award').text(award)
         }
       })
     })
+
+    // Staff note: until awards are confirmed and entered, this field should
+    // be bulk-filled as EXCLUDED in Compass, then updated once finalised.
+    $('<div>').addClass('rc-excend-note').html(
+      '📌 <strong>Fill down with <code>EXCLUDED</code> in the Compass platform, then change to these awards when available.</strong>'
+    ).appendTo(excBody)
   }
 
   function getTasks(activityId) {
