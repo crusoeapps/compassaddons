@@ -36,21 +36,34 @@ $(document).ready(function() {
 
   var HIGH_TASKS_SUBJECTS = ['English', 'Mathematics']
 
+  // Valid task-name prefixes — used to check both the task Name and its
+  // Title on Report against the same naming convention.
+  var VALID_TASK_PREFIXES = ['Key Assessment Task', 'Unit', 'Exam', 'SAC', 'Semester', 'Structured']
+  function hasValidTaskPrefix(name) {
+    return VALID_TASK_PREFIXES.some(function(prefix) { return name.startsWith(prefix) })
+  }
+
+  // Returns { min: <number>, context: <string for warning messages> }
+  // so the count and its explanation always come from one place.
   function getMinTasks(subjectName, activityName) {
-    // Advisory classes have no minimum task requirement
-    if (/advisory/i.test(subjectName) || /advisory/i.test(activityName)) return 0
+    if (/advisory/i.test(subjectName) || /advisory/i.test(activityName)) {
+      return { min: 0, context: 'Advisory — no minimum' }
+    }
     var yr = detectYearLevel(subjectName, activityName)
-    if (yr !== 7 && yr !== 8) return 3
-    // English and Mathematics Yr 7 & 8 require 4 tasks
+    if (yr !== 7 && yr !== 8) {
+      return { min: 3, context: 'minimum is 3 tasks' }
+    }
     var isHighTask = HIGH_TASKS_SUBJECTS.some(function(s) {
       return subjectName.toLowerCase().includes(s.toLowerCase())
     })
-    if (isHighTask) return 4
-    // Other core subjects require 3 tasks
+    if (isHighTask) {
+      return { min: 4, context: `Year ${yr} English/Mathematics — minimum is 4 tasks` }
+    }
     var isCore = CORE_SUBJECTS.some(function(core) {
       return subjectName.toLowerCase().includes(core.toLowerCase())
     })
-    return isCore ? 3 : 2
+    var min = isCore ? 3 : 2
+    return { min: min, context: `Year ${yr} non-core subject — minimum is ${min} tasks` }
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -490,6 +503,32 @@ $(document).ready(function() {
       margin-top: 4px;
     }
 
+    /* Checkable detail items — tick to mark resolved */
+    #dash .rc-detail-item.rc-detail-checkable {
+      align-items: flex-start;
+      cursor: default;
+    }
+    #dash .rc-detail-check {
+      width: 13px;
+      height: 13px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      cursor: pointer;
+      accent-color: #16a34a;
+    }
+    #dash .rc-detail-check-text {
+      flex: 1;
+      transition: color 0.15s, text-decoration 0.15s;
+    }
+    #dash .rc-detail-item.resolved {
+      background: #f0fdf4;
+    }
+    #dash .rc-detail-item.resolved .rc-detail-check-text {
+      color: #15803d;
+      text-decoration: line-through;
+      text-decoration-color: #86efac;
+    }
+
     /* ── Excend ── */
     #dash .rc-excend {
       border: 1px solid #bbf7d0;
@@ -835,18 +874,50 @@ $(document).ready(function() {
         var cnt = $('<span>').addClass('rc-summary-count ' + cntClass).text('0').appendTo(row)
         var detail = $('<div>').addClass('rc-detail-panel').appendTo(container)
         row.click(function() { detail.toggleClass('open') })
-        return {
+        var obj = {
           count: 0,
+          activeCount: 0,
           cnt: cnt,
+          cntClass: cntClass,
           detail: detail,
           add: function(text) {
             this.count++
-            cnt.text(this.count)
+            this.activeCount++
+            cnt.text(this.activeCount)
             var item = $('<div>').addClass('rc-detail-item').appendTo(detail)
             $('<div>').addClass('rc-detail-dot').appendTo(item)
             $('<div>').text(text).appendTo(item)
+            return item
+          },
+          // addCheckable: same as add, but renders a tick box.
+          // Ticking it marks that item resolved, decrements the live count,
+          // and turns the badge green once all items in this row are ticked.
+          addCheckable: function(text) {
+            var self = this
+            this.count++
+            this.activeCount++
+            cnt.text(this.activeCount)
+            var item = $('<div>').addClass('rc-detail-item rc-detail-checkable').appendTo(detail)
+            var box = $('<input type="checkbox">').addClass('rc-detail-check').appendTo(item)
+            var textDiv = $('<div>').addClass('rc-detail-check-text').text(text).appendTo(item)
+            box.on('change', function() {
+              if (this.checked) {
+                item.addClass('resolved')
+                self.activeCount--
+              } else {
+                item.removeClass('resolved')
+                self.activeCount++
+              }
+              if (self.activeCount <= 0) {
+                cnt.text('✓').removeClass('cnt-r cnt-w').addClass('cnt-g')
+              } else {
+                cnt.text(self.activeCount).removeClass('cnt-g').addClass(self.cntClass)
+              }
+            })
+            return item
           }
         }
+        return obj
       }
 
       // ── Adapters so existing code still works ────────────────────────────
@@ -862,7 +933,7 @@ $(document).ready(function() {
         add: function(text, sev) {
           this.count++
           // Parse label from text: "Task X 'name': issue" → label=issue, sub=task name
-          var taskMatch = text.match(/^(Task \d+ '[^']+'):\s*(.+)/)
+          var taskMatch = text.match(/^(.+? '[^']+'):\s*(.+)/)
           var label, sub
           if (taskMatch) {
             sub  = taskMatch[1]
@@ -877,6 +948,17 @@ $(document).ready(function() {
           }
           ltSummaryRows[key].add(text)
           markSeverity(sev)
+        },
+        // addCheckable: grading-result warnings that the teacher can tick off
+        // once verified (incorrect grade / exam exemption checks)
+        addCheckable: function(text, sev, groupLabel, sub) {
+          this.count++
+          var key = groupLabel + '|' + (sub || '')
+          if (!ltSummaryRows[key]) {
+            ltSummaryRows[key] = makeSummaryRow(ltRows, groupLabel, sub, sev)
+          }
+          ltSummaryRows[key].addCheckable(text)
+          markSeverity(sev)
         }
       }
 
@@ -884,18 +966,21 @@ $(document).ready(function() {
         count: 0,
         add: function(text, sev) {
           this.count++
-          // Parse: "Task X 'name': results missing for STUDENT" → label=task name
-          var taskMatch = text.match(/^(Task \d+ '[^']+'):\s*results missing for (.+)/)
           var label, sub
-          if (taskMatch) {
+
+          // Pattern: "<pill> '<name>': results missing for STUDENT"
+          var missingMatch = text.match(/^(.+? '[^']+'):\s*results missing for (.+)/)
+
+          if (missingMatch) {
             label = 'Results missing'
-            sub   = taskMatch[1]
+            sub   = missingMatch[1]
           } else {
             // Report field: "STUDENT — 'FIELD' is missing"
             var fieldMatch = text.match(/'([^']+)' is missing/)
             label = fieldMatch ? fieldMatch[1] + ' missing' : text.substring(0, 40)
             sub   = null
           }
+
           var key = label + '|' + (sub || '')
           if (!semSummaryRows[key]) {
             semSummaryRows[key] = makeSummaryRow(semRows, label, sub, sev)
@@ -1005,10 +1090,10 @@ $(document).ready(function() {
           if (t.taskReportDescription && t.taskReportDescription.includes("\n\n")) {
             setupWarn(`Task ${katCount} '${t.name}': extra blank line in description — edit Learning Task > Reporting > Task Summary Description`)
           }
-          if (!(t.name.startsWith("Key Assessment Task") || t.name.startsWith("Unit") || t.name.startsWith("Exam") || t.name.startsWith("SAC") || t.name.startsWith("Semester") || t.name.startsWith("Structured"))) {
+          if (!hasValidTaskPrefix(t.name)) {
             setupWarn(`Task ${katCount}: '${t.name}' does not follow naming format — edit Learning Task > Name`)
           }
-          if (!(t.taskTitleOnReport.startsWith("Key Assessment Task") || t.taskTitleOnReport.startsWith("Unit") || t.taskTitleOnReport.startsWith("Exam") || t.taskTitleOnReport.startsWith("SAC") || t.taskTitleOnReport.startsWith("Semester") || t.taskTitleOnReport.startsWith("Structured"))) {
+          if (!hasValidTaskPrefix(t.taskTitleOnReport)) {
             setupWarn(`Task ${katCount}: title on report '${t.taskTitleOnReport}' does not follow naming format — edit Learning Task > Reporting > Title on Report`)
           }
           if (t.includeInOverall) {
@@ -1044,59 +1129,51 @@ $(document).ready(function() {
               var display = (this.displayValue || '').toString().trim()
               var checkVal = val || display
 
-              // KAT graded "Not Assessed" — warning
+              // KAT graded "Not Assessed" — ERROR, checkable, left column (Learning Task issues)
               if (isKATtask && (checkVal === 'Not Assessed' || display === 'Not Assessed')) {
-                setupGroup.add(
-                  `${pillLabel} '${t.name}': ${student.userName} is graded "Not Assessed" — please check if this is correct`,
-                  'warning'
+                setupGroup.addCheckable(
+                  `${student.userName}: incorrect grade unless formal approval granted by Reporting Leader`,
+                  'error',
+                  'Incorrect grade — Not Assessed',
+                  `${pillLabel} '${t.name}'`
                 )
-                if (!kat.hasClass('error')) kat.addClass('warning')
-                markSeverity('warning')
+                if (!kat.hasClass('error')) kat.addClass('error')
                 return false // only flag once per student per task
               }
 
-              // Semester Exam graded "Absent" — warning
+              // Semester Exam graded "Absent" — WARNING, checkable, left column
               if (isExamTask && (checkVal === 'Absent' || display === 'Absent')) {
-                setupGroup.add(
-                  `${pillLabel} '${t.name}': ${student.userName} is marked "Absent" — check if this is correct`,
-                  'warning'
+                setupGroup.addCheckable(
+                  `${student.userName}: incorrect grade`,
+                  'warning',
+                  'Incorrect grade — Absent (Exam)',
+                  `${pillLabel} '${t.name}'`
                 )
-                if (!kat.hasClass('error')) kat.addClass('warning')
-                markSeverity('warning')
+                if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
                 return false
               }
 
-              // Semester Exam graded "Not Assessed" — check for exam exemption
+              // Semester Exam graded "Not Assessed" — WARNING, checkable, left column
               if (isExamTask && (checkVal === 'Not Assessed' || display === 'Not Assessed')) {
-                setupGroup.add(
-                  `${pillLabel} '${t.name}': ${student.userName} is graded "Not Assessed" — check if this student is exempt from exams`,
-                  'warning'
+                setupGroup.addCheckable(
+                  `${student.userName}: tick this box if you have marked this task as submitted AND the student is on the Exemptions list on A & R Hub`,
+                  'warning',
+                  'Not Assessed — check exam exemption',
+                  `${pillLabel} '${t.name}'`
                 )
-                if (!kat.hasClass('error')) kat.addClass('warning')
-                markSeverity('warning')
+                if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
                 return false
               }
             })
           })
         })
 
-        // Min tasks check
-        var minTasks = getMinTasks(subjectName, actName)
-        var yr       = detectYearLevel(subjectName, actName)
-        if (katCount < minTasks) {
-          var isHighTask = HIGH_TASKS_SUBJECTS.some(function(s) {
-            return subjectName.toLowerCase().includes(s.toLowerCase())
-          })
-          var ctx
-          if (isHighTask && (yr === 7 || yr === 8)) {
-            ctx = `Year ${yr} English/Mathematics — minimum is ${minTasks} tasks`
-          } else if (yr === 7 || yr === 8) {
-            ctx = `Year ${yr} non-core subject — minimum is ${minTasks} tasks`
-          } else {
-            ctx = `minimum is ${minTasks} tasks`
-          }
+        // Min tasks check — context string comes straight from getMinTasks,
+        // so there is exactly one place that decides both the number and the wording.
+        var taskMin = getMinTasks(subjectName, actName)
+        if (katCount < taskMin.min) {
           setupGroup.add(
-            `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${ctx}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
+            `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${taskMin.context}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
             'warning'
           )
           markSeverity('warning')
