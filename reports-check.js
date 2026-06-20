@@ -1317,36 +1317,6 @@ $(document).ready(function() {
     })
   }
 
-  // ── GPA ───────────────────────────────────────────────────────────────────
-  // Per-SUBJECT GPA, sourced from the Report tab data (Work Habits scores on
-  // this specific class's semester report) — NOT the student's whole-school
-  // overall GPA. Scoped to entityId (the class) + cycleId (the report cycle),
-  // matching what staff see on the Report tab for this exact class.
-  function getGPA(entityId, cycleId) {
-    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
-      data: JSON.stringify({ cycleId: cycleId, entityId: entityId, editing: false }),
-      contentType: 'application/json', type: 'POST'
-    })
-  }
-  function extractGPA(gpaResponse, userId) {
-    try {
-      var entity = gpaResponse.d.entities.filter(s => s.id == userId)[0]
-      if (!entity) {
-        console.log('EXCEND DEBUG GPA — no entity found for userId', userId, '| available entity ids:', gpaResponse.d.entities.map(e => e.id))
-        return null
-      }
-      var values = entity.results
-        .map(r => [r.result, gpaResponse.d.aoas.filter(a => a.id == r.id)])
-        .map(a => a[1][0].options.filter(b => b.id == a[0]))
-        .map(a => a[0].value)
-        .filter(x => x)
-      return values.length ? (values.reduce((a, b) => a + b) / values.length) : null
-    } catch (e) {
-      console.log('EXCEND DEBUG GPA — extractGPA threw for userId', userId, '| error:', e.message, '| raw response:', JSON.stringify(gpaResponse).substring(0, 400))
-      return null
-    }
-  }
-
   function getEnrolments(activityId) {
     return $.ajax("/Services/Activity.svc/GetEnrolmentsByActivityId", {
       data: JSON.stringify({ activityId: activityId, page: 1, start: 0, limit: 100 }),
@@ -1362,85 +1332,78 @@ $(document).ready(function() {
     })
   }
 
-  // ── Excellence & Endeavour ────────────────────────────────────────────────
-  // Award criteria (per the school's published rubric):
-  //
-  //              | Excellence Award                | Endeavour Award
-  //  ------------|----------------------------------|---------------------------
-  //  GPA for     | 3.75 or more                     | 3.75 or more
-  //  this class  |                                  |
-  //  ------------|----------------------------------|---------------------------
-  //  Key         | ALL KATs submitted ON TIME        | ALL KATs submitted
-  //  Assessment  | AND graded "Working Above         | (timing/grade not
-  //  Tasks       | Expected Level" or higher         | considered further)
-  //
-  // "Not Assessed" or "Not Submitted" on ANY KAT disqualifies a student from
-  // BOTH awards outright, regardless of GPA or other tasks.
-  // Excellence supersedes Endeavour — a student meeting both sets of
-  // criteria is only ever awarded Excellence, never both.
-  // GPA is per-SUBJECT (Report tab data for this class), not whole-school.
-
-  var HIGH_GRADE_VALUES = ['Working Well Above Expected Level', 'Working Above Expected Level']
-  var DISQUALIFYING_GRADES = ['Not Assessed', 'Not Submitted']
-
-  function isHighGrade(displayValue) {
-    return HIGH_GRADE_VALUES.includes((displayValue || '').trim())
-  }
-  function isDisqualifying(displayValue) {
-    return DISQUALIFYING_GRADES.includes((displayValue || '').trim())
-  }
-
   // KAT submission status codes (matches class-dashboard.js):
   // 1 = pending, 2 = overdue, 3 = on time, 4 = late
   function isOnTimeStatus(status) { return status === 3 }
 
+  // ── Excellence & Endeavour ────────────────────────────────────────────────
+  // Rebuilt to match the ORIGINAL, proven working logic (Andrew Kerr's
+  // reports-check.js) rather than inventing a new grade-lookup mechanism.
+  //
+  // The key insight: the semester report ALREADY contains a "Work Habits"
+  // grading item with plain-English values (Consistently/Usually/Sometimes/
+  // Rarely) that map directly to a 4/3/2/1 GPA-style score — no numeric
+  // grading-scheme lookup table is needed for this primary path. Only if a
+  // report has NO "Work Habits" item does the script fall back to a
+  // separate Progress Report GPA call (which DOES require the aoas/options
+  // numeric lookup, since that response shape is different).
+  //
+  // This is exactly why earlier attempts to translate KAT result codes
+  // (e.g. "result":"6", reportGradingSchemeOptionId) into a grade label
+  // were solving the wrong problem — that translation was never needed.
+  //
+  // School-specific additions on top of Andrew's original, confirmed
+  // against the school's rubric image:
+  //   - Excellence requires ALL KATs submitted ON TIME (not just present)
+  //   - Endeavour requires ALL KATs submitted (any grade/timing)
+  //   - "Not Assessed" or "Not Submitted" on ANY KAT disqualifies BOTH
+  //     awards outright, regardless of GPA
+  //   - KAT results are printed inline so staff can see what drove the
+  //     decision, instead of only showing the final award
+
+  function getGPA(entityId, cycleId) {
+    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
+      data: JSON.stringify({ cycleId: cycleId, entityId: entityId, editing: false }),
+      contentType: 'application/json', type: 'POST'
+    })
+  }
+
+  // Progress Report GPA fallback — only used when a student's semester
+  // report has no "Work Habits" item. Looks up the numeric result against
+  // the aoas/options reference table in the Progress Report response.
+  function loadGPAFallback(gpaResponse, userId) {
+    try {
+      return gpaResponse.d.entities
+        .filter(s => s.id == userId)[0]
+        .results.map(r => [r.result, gpaResponse.d.aoas.filter(a => a.id == r.id)])
+        .map(a => a[1][0].options.filter(b => b.id == a[0]))
+        .map(a => a[0].value)
+        .filter(x => x)
+    } catch {
+      return []
+    }
+  }
+
   function loadExcend(results, tasks, entityId, cycleId, excBody) {
-    // GetResultsByCycleAndActivity expects a PROGRESS REPORT cycle ID, not
-    // the semester report cycleId used everywhere else in this file — they
-    // are two different cycle ID spaces in Compass. The progress cycle ID
-    // is looked up via the "data-progress" attribute set on the matching
-    // dropdown option (see loadProgress()), which maps each semester cycle
-    // to its corresponding progress cycle by start date. Passing the wrong
-    // ID type here is what caused the GPA endpoint to return a 500 error
-    // for every student.
+    // GetResultsByCycleAndActivity (the fallback GPA call) expects a
+    // PROGRESS REPORT cycle ID, not the semester report cycleId used
+    // everywhere else — they are two different cycle ID spaces in Compass.
+    // Looked up via the "data-progress" attribute set on the matching
+    // dropdown option (see loadProgress()).
     var gpaCycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
 
-    // ── TEMPORARY DEBUG LOGGING ──
-    console.log('EXCEND DEBUG — semester cycleId:', cycleId, '| resolved gpaCycleId:', gpaCycleId)
-    // ── END TEMPORARY DEBUG LOGGING ──
-
-    // ── TEMPORARY DEBUG LOGGING — remove once Excellence & Endeavour is confirmed working ──
-    // Open the browser console (F12 → Console tab) and look for "EXCEND DEBUG"
-    // entries when you click into a class. This prints exactly what Compass
-    // sent back for each task, so we can see whether reportCycleId actually
-    // matches the cycle currently selected in the dropdown.
-    console.log('═══ EXCEND DEBUG: cycleId selected in dropdown =', cycleId, typeof cycleId, '═══')
-    $.each(tasks.d.data, function() {
-      var t = this
-      console.log(
-        'EXCEND DEBUG — Task:', t.name,
-        '| semesterReportCycles:', JSON.stringify(t.semesterReportCycles),
-        '| students.length:', (t.students || []).length
-      )
-    })
-    // ── END TEMPORARY DEBUG LOGGING ──
-
-    // Build per-student KAT submission + grade summary from the same task
-    // data already used for the Setup Issues / Results Missing checks —
-    // no separate fetch needed. Also collects a printable list of each
-    // KAT's result so staff can see exactly what drove the award decision.
-    var katSummary = {} // userId -> { allSubmitted, allOnTime, allHighGrade, disqualified, total, taskResults: [] }
+    // Build per-student KAT submission summary from the task data already
+    // fetched for the Setup Issues / Results Missing checks — no separate
+    // fetch needed. Tracks submission timing and disqualifying grades only;
+    // the actual award-quality grade signal comes from Work Habits below,
+    // matching the original script's design.
+    var katSummary = {} // userId -> { allSubmitted, allOnTime, disqualified, total, taskResults: [] }
 
     $.each(tasks.d.data, function() {
       var t = this
-      // Same filter as processTaskIssues: includeInSemesterReports lives
-      // INSIDE each entry of semesterReportCycles, scoped to a cycle — it
-      // is NOT a top-level property on the task object itself. The
-      // previous `if (!t.includeInSemesterReports) return` checked a
-      // field that never exists on the real Compass task response, so
-      // every task was silently filtered out before any student was
-      // ever counted — which is exactly why every row showed "No KATs"
-      // regardless of how much real task data existed.
+      // includeInSemesterReports lives INSIDE each entry of
+      // semesterReportCycles, scoped to a cycle — not a top-level property
+      // on the task object itself.
       if (!(t.semesterReportCycles && t.semesterReportCycles.some(
         function(s) { return s.includeInSemesterReports === true && s.reportCycleId == cycleId }
       ))) return
@@ -1450,48 +1413,32 @@ $(document).ready(function() {
         var student = this
         var uid = student.userId
         if (!katSummary[uid]) {
-          katSummary[uid] = {
-            allSubmitted: true, allOnTime: true, allHighGrade: true,
-            disqualified: false, total: 0, taskResults: []
-          }
+          katSummary[uid] = { allSubmitted: true, allOnTime: true, disqualified: false, total: 0, taskResults: [] }
         }
         var s = katSummary[uid]
         s.total++
 
-        // Same headline-grade lookup as the Setup Issues check, since
-        // Not Assessed / Absent tasks leave results[] empty in Compass.
         var studentResults = student.results || []
-        var headlineGrade = (
-          student.result || student.grade || student.displayValue ||
-          (studentResults[0] || {}).displayValue || ''
-        ).toString().trim()
+        var hasResult = studentResults.length > 0
 
-        // ── TEMPORARY DEBUG LOGGING — find the real grade field name ──
-        console.log('EXCEND DEBUG RAW —', student.userName || uid, '|', t.name, '| FULL OBJECT:', JSON.stringify(student))
-        console.log('EXCEND DEBUG TASK SCHEME —', t.name, '| gradingItems:', JSON.stringify(t.gradingItems), '| ALL TASK KEYS:', Object.keys(t))
-        // ── END TEMPORARY DEBUG LOGGING ──
+        // "Not Assessed" / "Absent" tasks leave results[] EMPTY in Compass
+        // rather than populating a result entry — so an empty array here
+        // could mean either "genuinely not submitted" or "graded Not
+        // Assessed/Absent". We can't distinguish the two from this task
+        // data alone (that distinction lives in the semester report results,
+        // handled separately below via the Award/Teacher Comment fields).
+        // For KAT submission tracking we treat empty results as not
+        // submitted, consistent with the Setup Issues check elsewhere.
+        s.taskResults.push({ name: t.name, submitted: hasResult })
 
-        s.taskResults.push({ name: t.name, grade: headlineGrade || '—' })
-
-        if (isDisqualifying(headlineGrade)) {
-          s.disqualified = true
-        }
-
-        var hasResult = studentResults.length > 0 || headlineGrade
         if (!hasResult) {
           s.allSubmitted = false
           s.allOnTime = false
-          s.allHighGrade = false
           return
         }
 
-        // Submission timing — Semester Exams use the same custom-due-date
-        // tolerance as the Advisory Rubric Calculator (overdue/late treated
-        // as on time, since the field doesn't reflect per-student due dates).
         var onTime = isExamTask ? true : isOnTimeStatus(student.submissionStatus)
         if (!onTime) s.allOnTime = false
-
-        if (!isHighGrade(headlineGrade)) s.allHighGrade = false
       })
     })
 
@@ -1501,69 +1448,87 @@ $(document).ready(function() {
       var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
       $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
 
-      var summary = katSummary[userId] || {
-        allSubmitted: false, allOnTime: false, allHighGrade: false,
-        disqualified: false, total: 0, taskResults: []
-      }
+      var summary = katSummary[userId] || { allSubmitted: false, allOnTime: false, disqualified: false, total: 0, taskResults: [] }
       var allKatsSubmitted = summary.total > 0 && summary.allSubmitted
       var allKatsOnTime    = allKatsSubmitted && summary.allOnTime
-      var allKatsHighGrade = allKatsSubmitted && summary.allHighGrade
 
-      // ── TEMPORARY DEBUG LOGGING ──
-      console.log(
-        'EXCEND DEBUG —', studentName,
-        '| userId:', userId,
-        '| katSummary found:', !!katSummary[userId],
-        '| total tasks counted:', summary.total,
-        '| allSubmitted:', summary.allSubmitted,
-        '| allOnTime:', summary.allOnTime,
-        '| allHighGrade:', summary.allHighGrade,
-        '| disqualified:', summary.disqualified,
-        '| taskResults:', JSON.stringify(summary.taskResults)
-      )
-      // ── END TEMPORARY DEBUG LOGGING ──
-
-      // Printed KAT results — visible directly in the row, e.g.
-      // "KAT1: Working Above Expected Level, KAT2: Working At Expected Level"
+      // Printed KAT submission status — visible directly in the row.
       var katText = summary.taskResults.length
-        ? summary.taskResults.map(function(r, i) { return `KAT${i + 1}: ${r.grade}` }).join(', ')
+        ? summary.taskResults.map(function(r, i) { return `KAT${i + 1}: ${r.submitted ? 'Submitted' : 'Not submitted'}` }).join(', ')
         : 'No KATs'
       $('<div>').addClass('rc-excend-kats').attr('title', katText).text(katText).appendTo(row)
 
+      // ── GPA + grade quality, read directly from the semester report ──
+      // This mirrors Andrew's original loadReports logic exactly: look for
+      // a "Work Habits" item with plain-English values first; only call
+      // the separate Progress Report GPA endpoint if none is found.
+      var gp = []
+      var highGradeOnAllAssessed = true
+      var hasAnyAssessedItem = false
+      var disqualified = false
+
+      $.each(this.results, function() {
+        if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
+          hasAnyAssessedItem = true
+          var dv = this.displayValue
+          var meetsHighBar = (
+            dv == "Working Well Above Expected Level" ||
+            dv == "Working Above Expected Level" ||
+            dv == "Excellent" ||
+            parseInt(dv) >= 80
+          )
+          if (!meetsHighBar) highGradeOnAllAssessed = false
+        }
+        if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") {
+          disqualified = true
+        }
+        if (this.itemName == "Work Habits") {
+          switch (this.value) {
+            case "Consistently": gp.push(4); break
+            case "Usually":      gp.push(3); break
+            case "Sometimes":    gp.push(2); break
+            case "Rarely":       gp.push(1); break
+          }
+        }
+      })
+
       var gpaCell = $('<div>').addClass('rc-excend-gpa').appendTo(row)
+      var awardCell = $('<div>').appendTo(row)
 
-      getGPA(entityId, gpaCycleId).always(function(gpaResponse) {
-        var gpa = extractGPA(gpaResponse, userId)
+      function decideAward(gp) {
+        var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
         gpaCell.text(gpa !== null ? `GPA ${gpa.toFixed(2)}` : 'GPA NA')
-
-        // ── TEMPORARY DEBUG LOGGING ──
-        console.log(
-          'EXCEND DEBUG —', studentName,
-          '| raw gpaResponse:', JSON.stringify(gpaResponse).substring(0, 300),
-          '| extracted gpa:', gpa
-        )
-        // ── END TEMPORARY DEBUG LOGGING ──
 
         var gpaMeetsBar = gpa !== null && gpa >= 3.75
         var award = null
 
-        // Not Assessed / Not Submitted on ANY KAT disqualifies both awards
-        // outright, regardless of GPA or every other task's result.
-        if (!summary.disqualified) {
-          if (gpaMeetsBar && allKatsOnTime && allKatsHighGrade) {
+        if (!disqualified && !summary.disqualified) {
+          if (gpaMeetsBar && allKatsOnTime && highGradeOnAllAssessed && hasAnyAssessedItem) {
             award = 'Excellence'
           } else if (gpaMeetsBar && allKatsSubmitted) {
             award = 'Endeavour'
           }
         }
 
-        var awardCell = $('<div>').appendTo(row)
         if (award) {
           awardCell.addClass('rc-excend-award').text(award)
-        } else if (summary.disqualified) {
-          awardCell.addClass('rc-excend-disqualified').text('Not eligible').attr('title', 'Not Assessed/Not Submitted on at least one KAT')
+        } else if (disqualified || summary.disqualified) {
+          awardCell.addClass('rc-excend-disqualified').text('Not eligible').attr('title', 'Not Assessed/Not Submitted on at least one item')
         }
-      })
+      }
+
+      if (gp.length) {
+        // Work Habits found directly on the semester report — use it,
+        // no extra API call needed (matches the original script exactly).
+        decideAward(gp)
+      } else {
+        // No Work Habits item — fall back to the separate Progress Report
+        // GPA call, same as the original script's design.
+        getGPA(entityId, gpaCycleId).always(function(gpaResponse) {
+          var fallbackGp = loadGPAFallback(gpaResponse, userId)
+          decideAward(fallbackGp)
+        })
+      }
     })
 
     // Staff note: until awards are confirmed and entered, this field should
