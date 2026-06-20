@@ -1331,14 +1331,21 @@ $(document).ready(function() {
   }
   function extractGPA(gpaResponse, userId) {
     try {
-      var values = gpaResponse.d.entities
-        .filter(s => s.id == userId)[0]
-        .results.map(r => [r.result, gpaResponse.d.aoas.filter(a => a.id == r.id)])
+      var entity = gpaResponse.d.entities.filter(s => s.id == userId)[0]
+      if (!entity) {
+        console.log('EXCEND DEBUG GPA — no entity found for userId', userId, '| available entity ids:', gpaResponse.d.entities.map(e => e.id))
+        return null
+      }
+      var values = entity.results
+        .map(r => [r.result, gpaResponse.d.aoas.filter(a => a.id == r.id)])
         .map(a => a[1][0].options.filter(b => b.id == a[0]))
         .map(a => a[0].value)
         .filter(x => x)
       return values.length ? (values.reduce((a, b) => a + b) / values.length) : null
-    } catch { return null }
+    } catch (e) {
+      console.log('EXCEND DEBUG GPA — extractGPA threw for userId', userId, '| error:', e.message, '| raw response:', JSON.stringify(gpaResponse).substring(0, 400))
+      return null
+    }
   }
 
   function getEnrolments(activityId) {
@@ -1447,12 +1454,7 @@ $(document).ready(function() {
         ).toString().trim()
 
         // ── TEMPORARY DEBUG LOGGING — find the real grade field name ──
-        if (!window._excendDebugLogged) {
-          window._excendDebugLogged = true
-          console.log('EXCEND DEBUG — RAW student object for', student.userName || uid, '| task:', t.name)
-          console.log('EXCEND DEBUG — full student JSON:', JSON.stringify(student))
-          console.log('EXCEND DEBUG — full task object keys:', Object.keys(t))
-        }
+        console.log('EXCEND DEBUG RAW —', student.userName || uid, '|', t.name, '| FULL OBJECT:', JSON.stringify(student))
         // ── END TEMPORARY DEBUG LOGGING ──
 
         s.taskResults.push({ name: t.name, grade: headlineGrade || '—' })
