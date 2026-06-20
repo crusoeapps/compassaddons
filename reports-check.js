@@ -21,61 +21,6 @@ $(document).ready(function() {
     })
   }
 
-  // ── Progress Report CSV (master GPA source) ──────────────────────────────
-  // Hosted at the same repo as this script. Auto-fetched once per session.
-  // Used instead of the live Gpa.svc API, which is currently unreliable.
-  var CSV_URL = 'https://crusoeapps.github.io/compassaddons/Progress_Report_-_Term_Two_2026.csv'
-  var csvGpaLookup = {}     // key: "name|subject" -> gpa float
-  var csvLoaded = false
-  var csvLoadFailed = false
-
-  function parseCsvLine(line) {
-    var result = []
-    var cur = ''
-    var inQuotes = false
-    for (var i = 0; i < line.length; i++) {
-      var ch = line[i]
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++ }
-        else inQuotes = !inQuotes
-      } else if (ch === ',' && !inQuotes) {
-        result.push(cur); cur = ''
-      } else {
-        cur += ch
-      }
-    }
-    result.push(cur)
-    return result
-  }
-
-  function loadProgressCsv() {
-    return $.get(CSV_URL).done(function(text) {
-      var lines = text.split(/\r?\n/).filter(function(l) { return l.trim().length })
-      var headers = parseCsvLine(lines[0]).map(function(h) { return h.trim() })
-      var idxId      = headers.indexOf('Id')
-      var idxSubject = headers.indexOf('Subject')
-      var idxOverall = headers.indexOf('Overall')
-
-      for (var i = 1; i < lines.length; i++) {
-        var cols = parseCsvLine(lines[i])
-        var id      = (cols[idxId]      || '').trim()
-        var subject = (cols[idxSubject] || '').trim()
-        var overall = (cols[idxOverall] || '').trim()
-        if (!id || !subject || !overall) continue
-        var key = id.toLowerCase() + '|' + subject.toLowerCase()
-        csvGpaLookup[key] = parseFloat(overall)
-      }
-      csvLoaded = true
-    }).fail(function() {
-      csvLoadFailed = true
-    })
-  }
-
-  function getCsvGpa(studentId, subjectCode) {
-    var key = studentId.toLowerCase() + '|' + subjectCode.toLowerCase()
-    return csvGpaLookup.hasOwnProperty(key) ? csvGpaLookup[key] : null
-  }
-
   // ── Year level & minimum task logic ──────────────────────────────────────
   var HIGH_TASK_SUBJECTS = ['English', 'Mathematics']
   var CORE_SUBJECTS      = ['English', 'Mathematics', 'Humanities', 'Science', 'Physical Education']
@@ -324,24 +269,6 @@ $(document).ready(function() {
     #dash .rc-issue-sev.warning { background: #fef3c7; color: #92400e; }
     #dash .rc-issue-sev.info    { background: #f3f4f6; color: #6b7280; }
 
-    #dash .rc-excend { border: 1px solid #bbf7d0; border-radius: 8px; overflow: hidden; margin-top: 8px; }
-    #dash .rc-excend-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 7px 12px; background: #f0fdf4; font-size: 12px; font-weight: 600; color: #15803d; cursor: pointer;
-    }
-    #dash .rc-excend-body { display: none; }
-    #dash .rc-excend.open .rc-excend-body { display: block; }
-    #dash .rc-excend-row {
-      display: flex; align-items: center; gap: 8px; padding: 5px 12px;
-      border-bottom: 1px solid #f0fdf4; font-size: 11.5px;
-    }
-    #dash .rc-excend-row:last-child { border-bottom: none; }
-    #dash .rc-excend-name { width: 28%; font-weight: 500; flex-shrink: 0; }
-    #dash .rc-excend-award {
-      margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 7px;
-      border-radius: 20px; background: #dcfce7; color: #15803d;
-    }
-
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
       padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
@@ -355,8 +282,7 @@ $(document).ready(function() {
       #dash .rc-topbar-btn { display: none !important; }
       #dash .rc-staff-body,
       #dash .rc-activity-body,
-      #dash .rc-issue-group-body,
-      #dash .rc-excend-body { display: block !important; }
+      #dash .rc-issue-group-body { display: block !important; }
     }
   </style></div>`).appendTo('body')
 
@@ -395,15 +321,6 @@ $(document).ready(function() {
   })
 
   $('<div>').addClass('rc-spacer').appendTo(topbar)
-
-  var csvStatus = $('<div>').addClass('rc-topbar-btn').css({ cursor: 'default', color: '#9ca3af' }).text('Loading GPA data…').appendTo(topbar)
-  loadProgressCsv().always(function() {
-    if (csvLoadFailed) {
-      csvStatus.text('⚠ GPA CSV failed to load').css({ background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' })
-    } else {
-      csvStatus.text('✓ GPA data loaded (' + Object.keys(csvGpaLookup).length + ' records)').css({ background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0' })
-    }
-  })
 
   if (Compass.organisationUserRoles.ReportsAdmin) {
     $('<div>').addClass('rc-topbar-btn').text('Expand all').click(function() {
@@ -455,8 +372,6 @@ $(document).ready(function() {
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
 
   getCycles().done(loadCycles)
-  getProgress().done(loadProgress)
-  getOpenProgress().done(loadProgress)
 
   // ── API: Cycles ───────────────────────────────────────────────────────────
   function getCycles() {
@@ -471,25 +386,6 @@ $(document).ready(function() {
       if (i === 0) opt.attr('selected', 'selected')
     })
     selectCycle.change()
-  }
-  function getProgress() {
-    return $.ajax("/Services/Gpa.svc/GetPublishedCycles", {
-      data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
-      contentType: 'application/json', type: 'POST'
-    })
-  }
-  function getOpenProgress() {
-    return $.ajax("/Services/Gpa.svc/GetOpenCycles", {
-      data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
-      contentType: 'application/json', type: 'POST'
-    })
-  }
-  function loadProgress(cycles) {
-    $.each(cycles.d, function(i, n) {
-      var start = new Date(n.start)
-      start = new Date(start - start.getTimezoneOffset() * -60 * 1000).toLocaleDateString("en-GB")
-      $(`#dash select option[data-start="${start}"]`).attr("data-progress", n.id)
-    })
   }
 
   // ── Cycle ─────────────────────────────────────────────────────────────────
@@ -644,7 +540,7 @@ $(document).ready(function() {
         }
       }
 
-      var storedTaskData, storedReportData, storedEnrolments, storedExcBody
+      var storedTaskData, storedReportData, storedEnrolments
 
       function renderIssues() {
         setupGroup.body.empty(); setupGroup.count = 0; setupGroup.badge.text('0')
@@ -768,12 +664,6 @@ $(document).ready(function() {
         })
       }
 
-      var excend  = $('<div>').addClass('rc-excend').appendTo(actBody)
-      var exHdr   = $('<div>').addClass('rc-excend-header').click(function() { excend.toggleClass('open') }).appendTo(excend)
-      $('<span>').text('Excellence & Endeavour').appendTo(exHdr)
-      $('<span>').text('▶').css({ fontSize: '9px' }).appendTo(exHdr)
-      var excBody = $('<div>').addClass('rc-excend-body').appendTo(excend)
-
       $.when(getReports(entityId, cycleId), getTasks(activityId), getEnrolments(activityId))
         .done(function(results, tasks, enrolments) {
           storedTaskData   = tasks[0]
@@ -782,7 +672,6 @@ $(document).ready(function() {
 
           $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
           renderIssues()
-          loadExcend(results[0], activityId, cycleId, excBody, actName)
         }).done(function() {
           count++
           pf.css('width', (count / total * 100) + '%')
@@ -811,24 +700,7 @@ $(document).ready(function() {
     })
   }
 
-  // ── GPA ───────────────────────────────────────────────────────────────────
-  function getGPA(entityId, cycleId) {
-    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
-      data: JSON.stringify({ cycleId: cycleId, entityId: entityId, editing: false }),
-      contentType: 'application/json', type: 'POST'
-    })
-  }
-  function loadGPA(results, userId) {
-    try {
-      return results.d.entities
-        .filter(s => s.id == userId)[0]
-        .results.map(r => [r.result, results.d.aoas.filter(a => a.id == r.id)])
-        .map(a => a[1][0].options.filter(b => b.id == a[0]))
-        .map(a => a[0].value)
-        .filter(x => x)
-    } catch { return false }
-  }
-
+  // ── Enrolments ────────────────────────────────────────────────────────────
   function getEnrolments(activityId) {
     return $.ajax("/Services/Activity.svc/GetEnrolmentsByActivityId", {
       data: JSON.stringify({ activityId: activityId, page: 1, start: 0, limit: 100 }),
@@ -837,6 +709,7 @@ $(document).ready(function() {
   }
   function loadEnrolments(results) { return results.d.map(s => s.uid) }
 
+  // ── Reports ───────────────────────────────────────────────────────────────
   function getReports(entityId, cycleId) {
     return $.ajax("/Services/Reports.svc/GetReportReviewerBlob", {
       data: JSON.stringify({ entityType: 1, entityId: entityId, cycleId: cycleId }),
@@ -844,64 +717,7 @@ $(document).ready(function() {
     })
   }
 
-  function loadExcend(results, activityId, cycleId, excBody, subjectCode) {
-    $.each(results.d.entities, function() {
-      var studentName = this.name
-      // Student ID as it appears in the CSV export — Compass exposes this as
-      // 'uii' (user import identifier) on most entity payloads, e.g. "ABD0002"
-      var studentId = this.uii || this.importIdentifier || this.code || ''
-      var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
-      $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
-      var ex = [], en = true
-      $.each(this.results, function() {
-        if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
-          var abbr = (this.displayValue.match(/\b([A-Z])/g) || [this.displayValue]).join('')
-          $('<div>').text(abbr).attr('title', this.displayValue).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-          ex.push(
-            this.displayValue == "Working Well Above Expected Level" ||
-            this.displayValue == "Working Above Expected Level" ||
-            this.displayValue == "Working At Expected Level" ||
-            this.displayValue == "Excellent" ||
-            parseInt(this.displayValue) >= 50 ||
-            (this.displayValue == "Absent" && this.itemName == "Semester Exam")
-          )
-        }
-        if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") en = false
-      })
-
-      // GPA source: master CSV (matched by student ID + subject code)
-      var csvGpa = studentId ? getCsvGpa(studentId, subjectCode) : null
-      var gpa, gpaLabel, labelColor
-
-      if (csvGpa !== null) {
-        gpa = csvGpa
-        gpaLabel = `GPA ${gpa.toFixed(2)}`
-        labelColor = '#6b7280'
-      } else if (!csvLoaded && !csvLoadFailed) {
-        gpa = null
-        gpaLabel = 'GPA loading…'
-        labelColor = '#9ca3af'
-      } else if (!studentId) {
-        gpa = null
-        gpaLabel = 'GPA — no student ID'
-        labelColor = '#dc2626'
-      } else {
-        gpa = null
-        gpaLabel = 'GPA — no CSV match'
-        labelColor = '#dc2626'
-      }
-
-      $('<div>').text(gpaLabel).css({ fontSize: '11px', color: labelColor }).appendTo(row)
-
-      if (gpa !== null && gpa >= 3.75 && en) {
-        var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
-        $('<div>').addClass('rc-excend-award').text(award).appendTo(row)
-      } else {
-        $('<div>').appendTo(row)
-      }
-    })
-  }
-
+  // ── Tasks ─────────────────────────────────────────────────────────────────
   function getTasks(activityId) {
     return $.ajax("/Services/LearningTasks.svc/GetAllLearningTasksByActivityId", {
       data: JSON.stringify({ activityId: activityId, page: 1, start: 0, limit: 2000 }),
