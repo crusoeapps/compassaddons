@@ -240,7 +240,7 @@ var headers = {
   'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98% (fully explained absences).',
-  'Behaviour':       'Behaviour & conduct (1–4). Based ONLY on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour (negative points), and REAL Commendation (positive points). Other chronicle categories are ignored.',
+  'Behaviour':       "Behaviour & conduct (1–4), across ALL of the student's classes (not just this one). Based ONLY on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour (negative points), and REAL Commendation (positive points). A single Detention or Suspension drops the score even with an otherwise clean record. Other chronicle categories are ignored.",
   'Extra Curricular':'Involvement in non-classroom activities. 1=none, 2=one, 3=two–three, 4=four+ (inc. 2 non-sport).',
   'Total /20':       'Sum of all five scores. 19-20=Completion with Commendation, 12-18=Completion, 7-11=Participation, <7=Enrolment.'
 }
@@ -317,8 +317,19 @@ function getGPA(user) {
   return compassPost("/Services/Gpa.svc/GetOverallGraphData", { userId: user }, { user: user })
 }
 
-function getChronicle(activityId) {
-  return compassPost("/Services/ChronicleV2.svc/GetCategoryUsageCount", { type: 1, id: activityId })
+// Per-student chronicle feed across ALL classes the student is enrolled in
+// — not just the one class this dashboard happens to be open on. Behaviour
+// (detentions, suspensions, negative points etc.) can be logged by any
+// teacher in any subject, so scoping to a single activityId silently
+// excluded most of a student's real chronicle history. filterCategoryIds
+// is omitted to match the "All categories" default — we filter client-side
+// in loadChronicleForStudent instead, since we need every category present
+// to separate Commendations from the various negative categories.
+function getStudentChronicle(userId) {
+  return compassPost("/Services/ChronicleV2.svc/GetUserChronicleFeed", {
+    targetUserId: userId, startDate: startDate, endDate: endDate,
+    start: 0, pageSize: 200, asParent: false, page: 1, limit: 200
+  }, { user: userId })
 }
 
 // Events API returns event NAME and CATEGORY (unlike the generic attendance
@@ -358,9 +369,8 @@ function loadStudents(students) {
     getTasks(user).done(loadTasks)
     getGPA(user).done(loadGPA)
     getEvents(user).done((data) => loadEvents(data, user))
+    getStudentChronicle(user).done((data) => loadChronicleForStudent(data, user))
   })
-
-  getChronicle(activityId).done(loadChronicle)
 }
 
 // ── Attendance ────────────────────────────────────────────────────────────────
@@ -480,9 +490,9 @@ function loadGPA(cycles) {
 //
 // RESTRICTED ALGORITHM — only these exact chronicle categories are considered.
 // All other categories (general chronicle notes, academic flags, parent contact
-// logs etc.) are ignored entirely, even if they carry Red/Amber/Green points.
+// logs etc.) are ignored entirely, even if they carry points.
 //
-// Commendations: ONLY "REAL Commendation" category Green points count.
+// Commendations: ONLY "REAL Commendation" category counts as positive.
 // Negative points / detentions / suspensions: ONLY from these exact categories:
 //   - Attitude/Behaviour
 //   - Out of Class
@@ -490,8 +500,14 @@ function loadGPA(cycles) {
 //   - Non Negotiable Behaviour
 //   - Detention
 //   - Suspension
-
-var behaviourData = {}
+//
+// Scoped per-STUDENT across ALL their classes (not just the class this
+// dashboard happens to be open on) — a detention logged by a Maths teacher
+// must count even when viewing this student from their Advisory/Science class.
+//
+// A single severe incident (one Detention or one Suspension) drops the
+// score immediately, even with an otherwise clean record — confirmed
+// school rule, not just a cumulative points threshold.
 
 var COMMENDATION_CATEGORY = 'REAL Commendation'
 var NEGATIVE_CATEGORIES = [
@@ -503,88 +519,58 @@ var NEGATIVE_CATEGORIES = [
   'Suspension'
 ]
 
-function loadChronicle(chronicle) {
-  $.get("/Services/ReferenceDataCache.svc/GetChronicleCategories", function(categories) {
+function loadChronicleForStudent(feed, user) {
+  var d = { detentions: 0, suspensions: 0, ocwe: 0, negPoints: 0, commendations: 0 }
 
-    $.each(chronicle.d, function() {
-      var catId   = this.categoryId
-      var catName = (categories.d.filter(c => c.id == catId)[0] || {}).name || ''
+  $.each(feed.d.data || feed.d || [], function() {
+    var entry = this
+    var catName = entry.category || entry.categoryName || ''
+    var points  = Number(entry.points) || 0
 
-      // Only process categories that are explicitly relevant to this algorithm.
-      var isCommendationCat = (catName === COMMENDATION_CATEGORY)
-      var isNegativeCat      = NEGATIVE_CATEGORIES.includes(catName)
-      var isDetentionCat     = (catName === 'Detention')
-      var isSuspensionCat    = (catName === 'Suspension')
-
-      if (!isCommendationCat && !isNegativeCat) return // ignore all other categories entirely
-      if (!this.counts) return
-
-      $.each(this.counts, function() {
-        var user = this.StudentId
-        if (!behaviourData[user]) {
-          behaviourData[user] = { detentions: 0, suspensions: 0, negPoints: 0, commendations: 0, ocwe: 0 }
-        }
-        var d = behaviourData[user]
-
-        if (isDetentionCat) {
-          d.detentions += (this.Grey + this.Green + this.Amber + this.Red)
-        }
-        if (isSuspensionCat) {
-          d.suspensions += (this.Grey + this.Green + this.Amber + this.Red)
-        }
-        if (catName === 'Out of Class') {
-          d.ocwe += (this.Grey + this.Green + this.Amber + this.Red)
-        }
-        if (isNegativeCat) {
-          d.negPoints += (this.Red + this.Amber)
-        }
-        if (isCommendationCat) {
-          d.commendations += this.Green
-        }
-      })
-    })
-
-    $.each(behaviourData, function(user, d) {
-      var score
-      if (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) {
-        score = 1
-      } else if (d.detentions >= 1 || d.suspensions >= 1 || d.negPoints >= 8) {
-        score = 2
-      } else if (d.commendations >= 12 && d.negPoints <= 2 && d.ocwe === 0) {
-        // Score 4 requires ZERO OCWE posts per rubric
-        score = 4
-      } else {
-        score = 3
-      }
-
-      var detail = []
-      if (d.detentions)    detail.push(d.detentions + ' detention' + (d.detentions > 1 ? 's' : ''))
-      if (d.suspensions)   detail.push(d.suspensions + ' suspension' + (d.suspensions > 1 ? 's' : ''))
-      if (d.negPoints)     detail.push(d.negPoints + ' neg pts')
-      if (d.commendations) detail.push(d.commendations + ' commendations')
-      if (d.ocwe)          detail.push(d.ocwe + ' OCWE')
-
-      var el = $('.dash' + user + ' .behaviour')
-      el.empty()
-      el.append(scoreBadge(score))
-      el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
-      recordScore(user, 'behaviour', score)
-    })
-
-    // Students with zero matching chronicle entries never entered behaviourData
-    // above, so they still need a default score of 4 (exemplary — no issues).
-    $('#dash tbody tr').each(function() {
-      var match = ($(this).attr('class') || '').match(/dash(\d+)/)
-      if (!match) return
-      var user = match[1]
-      var el = $('.dash' + user + ' .behaviour')
-      if (!el.children().length) {
-        el.append(scoreBadge(4))
-        el.append($('<span>').addClass('detail-text').text('No entries'))
-        recordScore(user, 'behaviour', 4)
-      }
-    })
+    if (catName === 'Detention') {
+      d.detentions++
+      if (points < 0) d.negPoints += Math.abs(points)
+    } else if (catName === 'Suspension') {
+      d.suspensions++
+      if (points < 0) d.negPoints += Math.abs(points)
+    } else if (catName === 'Out of Class') {
+      d.ocwe++
+      if (points < 0) d.negPoints += Math.abs(points)
+    } else if (NEGATIVE_CATEGORIES.includes(catName)) {
+      if (points < 0) d.negPoints += Math.abs(points)
+    } else if (catName === COMMENDATION_CATEGORY) {
+      if (points > 0) d.commendations += points
+    }
+    // Every other category is ignored entirely, regardless of points.
   })
+
+  var score
+  // A single severe incident drops the score immediately — confirmed
+  // school rule, independent of cumulative points.
+  if (d.detentions >= 1 || d.suspensions >= 1) {
+    score = (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) ? 1 : 2
+  } else if (d.negPoints >= 15) {
+    score = 1
+  } else if (d.negPoints >= 8) {
+    score = 2
+  } else if (d.commendations >= 12 && d.negPoints <= 2 && d.ocwe === 0) {
+    score = 4
+  } else {
+    score = 3
+  }
+
+  var detail = []
+  if (d.detentions)    detail.push(d.detentions + ' detention' + (d.detentions > 1 ? 's' : ''))
+  if (d.suspensions)   detail.push(d.suspensions + ' suspension' + (d.suspensions > 1 ? 's' : ''))
+  if (d.negPoints)     detail.push(d.negPoints + ' neg pts')
+  if (d.commendations) detail.push(d.commendations + ' commendations')
+  if (d.ocwe)          detail.push(d.ocwe + ' OCWE')
+
+  var el = $('.dash' + user + ' .behaviour')
+  el.empty()
+  el.append(scoreBadge(score))
+  el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
+  recordScore(user, 'behaviour', score)
 }
 
 // ── Extra Curricular ──────────────────────────────────────────────────────────

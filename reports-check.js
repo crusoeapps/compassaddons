@@ -1269,10 +1269,10 @@ $(document).ready(function() {
       var excend  = $('<div>').addClass('rc-excend').appendTo(actBody)
       var exHdr   = $('<div>').addClass('rc-excend-header').click(function() { excend.toggleClass('open') }).appendTo(excend)
       $('<span>').text('Excellence & Endeavour').attr('title',
-        'GPA is per-subject (this class\'s Report tab data, not whole-school).\n' +
+        'GPA is per-subject, sourced from the uploaded Progress Report CSV (gpa-lookup.json) — re-upload each cycle.\n' +
         'Excellence: GPA 3.75+ AND all KATs submitted on time AND graded "Working Above Expected Level" or higher.\n' +
         'Endeavour: GPA 3.75+ AND all KATs submitted (timing/grade not required).\n' +
-        'Not Assessed or Not Submitted on ANY KAT disqualifies both awards.\n' +
+        'Not Assessed or Not Submitted on ANY assessed item disqualifies both awards.\n' +
         'Excellence supersedes Endeavour.'
       ).appendTo(exHdr)
       $('<span>').text('▶').css({ fontSize: '9px' }).appendTo(exHdr)
@@ -1288,7 +1288,7 @@ $(document).ready(function() {
 
           $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
           renderIssues()
-          loadExcend(results[0], tasks[0], entityId, cycleId, excBody)
+          loadExcend(results[0], tasks[0], entityId, cycleId, excBody, actName)
         }).done(function() {
           count++
           pf.css('width', (count / total * 100) + '%')
@@ -1337,17 +1337,25 @@ $(document).ready(function() {
   function isOnTimeStatus(status) { return status === 3 }
 
   // ── Excellence & Endeavour ────────────────────────────────────────────────
-  // GPA source, confirmed with the school: every student's GPA here comes
-  // from PROGRESS REPORTS (per-subject), via GetResultsByCycleAndActivity
-  // scoped to entityId (this class) + the matching progress-cycle ID. This
-  // is DIFFERENT from Advisory Rubric Calculator's GPA (GetOverallGraphData),
-  // which is a whole-school average across every subject — using that here
-  // would give the wrong, non-subject-specific number.
+  // GPA source: a manually-uploaded Progress Report CSV export, hosted as a
+  // static JSON lookup file (gpa-lookup.json) alongside this script. This
+  // replaces the live GetResultsByCycleAndActivity API call, which required
+  // a correctly-resolved progress-cycle ID and a fragile aoas/options
+  // numeric lookup — both proved unreliable in testing. The CSV is the
+  // authoritative source Crusoe College already uses for per-subject GPA,
+  // so reading it directly is simpler and more accurate.
   //
-  // The "Work Habits" primary path from Andrew Kerr's original script is
-  // kept for portability (some schools may use it), but at Crusoe College
-  // Work Habits is never present, so every student goes through the
-  // Progress Report fallback below.
+  // ⚠️ MUST BE RE-EXPORTED AND RE-UPLOADED each report cycle — this file is
+  // a snapshot, not a live feed. Replace gpa-lookup.json in the repo with a
+  // fresh export whenever Progress Report data changes.
+  //
+  // Matching key: student NAME (normalised: trimmed, uppercased, collapsed
+  // whitespace) + SUBJECT CODE (e.g. "9HLT8"), since a confirmed shared ID
+  // field between this CSV and the Compass report API hasn't been verified.
+  // Name-based matching is not perfectly collision-proof — if two students
+  // share an identical name, only one will match correctly. Out of 920
+  // students in the source export, only 1 such collision exists, so this
+  // is treated as an acceptable known limitation rather than a blocker.
   //
   // School-specific award rules, confirmed against the school's rubric:
   //   - Excellence: GPA ≥3.75 AND all KATs submitted ON TIME AND graded
@@ -1359,37 +1367,24 @@ $(document).ready(function() {
   //     report fields like Teacher Comment, which are routinely blank
   //     mid-cycle and shouldn't block an award.
 
-  function getGPA(entityId, progressCycleId) {
-    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
-      data: JSON.stringify({ cycleId: progressCycleId, entityId: entityId, editing: false }),
-      contentType: 'application/json', type: 'POST'
-    })
-  }
-
-  // Looks up a student's GPA components from the Progress Report response:
-  // each result has a numeric `result`, matched against `aoas[].options[]`
-  // (a per-area-of-assessment lookup table) to get the actual GPA value.
-  function getProgressReportGPA(gpaResponse, userId) {
-    try {
-      var entity = (gpaResponse.d.entities || []).filter(s => s.id == userId)[0]
-      if (!entity) return []
-      return entity.results
-        .map(r => [r.result, gpaResponse.d.aoas.filter(a => a.id == r.id)])
-        .map(a => a[1][0].options.filter(b => b.id == a[0]))
-        .map(a => a[0].value)
-        .filter(x => x)
-    } catch {
-      return []
+  var gpaLookupPromise = null
+  function getGpaLookup() {
+    if (!gpaLookupPromise) {
+      gpaLookupPromise = $.ajax("https://crusoeapps.github.io/compassaddons/gpa-lookup.json", {
+        dataType: 'json'
+      })
     }
+    return gpaLookupPromise
+  }
+  function normaliseStudentName(name) {
+    return (name || '').trim().toUpperCase().replace(/\s+/g, ' ')
+  }
+  function lookupSubjectGpa(lookup, studentName, subjectCode) {
+    var key = normaliseStudentName(studentName) + '|' + (subjectCode || '').trim()
+    return Object.prototype.hasOwnProperty.call(lookup, key) ? lookup[key] : null
   }
 
-  function loadExcend(results, tasks, entityId, cycleId, excBody) {
-    // GetResultsByCycleAndActivity expects a PROGRESS REPORT cycle ID, not
-    // the semester report cycleId used everywhere else — they are two
-    // different cycle ID spaces in Compass. Looked up via the
-    // "data-progress" attribute set on the matching dropdown option.
-    var progressCycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
-
+  function loadExcend(results, tasks, entityId, cycleId, excBody, subjectCode) {
     // Build per-student KAT submission summary from the task data already
     // fetched for the Setup Issues / Results Missing checks — no separate
     // fetch needed.
@@ -1443,9 +1438,8 @@ $(document).ready(function() {
         : 'No KATs'
       $('<div>').addClass('rc-excend-kats').attr('title', katText).text(katText).appendTo(row)
 
-      // Read grade quality + Work Habits (if present) directly from the
-      // semester report — same data already fetched for processReportIssues.
-      var workHabitsGp = []
+      // Read Award/Teacher Comment disqualification signals directly from
+      // the semester report — same data already fetched for processReportIssues.
       var highGradeOnAllAssessed = true
       var hasAnyAssessedItem = false
       var disqualified = false
@@ -1464,21 +1458,12 @@ $(document).ready(function() {
           if (!meetsHighBar) highGradeOnAllAssessed = false
           if (dv == "Not Assessed" || dv == "Not Submitted") disqualified = true
         }
-        if (this.itemName == "Work Habits") {
-          switch (this.value) {
-            case "Consistently": workHabitsGp.push(4); break
-            case "Usually":      workHabitsGp.push(3); break
-            case "Sometimes":    workHabitsGp.push(2); break
-            case "Rarely":       workHabitsGp.push(1); break
-          }
-        }
       })
 
       var gpaCell   = $('<div>').addClass('rc-excend-gpa').appendTo(row)
       var awardCell = $('<div>').appendTo(row)
 
-      function renderAward(gp) {
-        var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
+      function renderAward(gpa) {
         gpaCell.text(gpa !== null ? `GPA ${gpa.toFixed(2)}` : 'GPA NA')
 
         var gpaMeetsBar = gpa !== null && gpa >= 3.75
@@ -1499,17 +1484,10 @@ $(document).ready(function() {
         }
       }
 
-      if (workHabitsGp.length) {
-        // Work Habits present on this report — use it directly, no extra
-        // API call needed. (Not expected at Crusoe College, kept for
-        // portability with schools that do use Work Habits.)
-        renderAward(workHabitsGp)
-      } else {
-        // Crusoe College path: GPA always comes from Progress Reports.
-        getGPA(entityId, progressCycleId).always(function(gpaResponse) {
-          renderAward(getProgressReportGPA(gpaResponse, userId))
-        })
-      }
+      getGpaLookup().always(function(lookup) {
+        var gpa = lookup ? lookupSubjectGpa(lookup, studentName, subjectCode) : null
+        renderAward(gpa)
+      })
     })
 
     // Staff note: until awards are confirmed and entered, this field should
