@@ -52,17 +52,17 @@ $(document).ready(function() {
     return $.get(CSV_URL).done(function(text) {
       var lines = text.split(/\r?\n/).filter(function(l) { return l.trim().length })
       var headers = parseCsvLine(lines[0]).map(function(h) { return h.trim() })
-      var idxName    = headers.indexOf('Name')
+      var idxId      = headers.indexOf('Id')
       var idxSubject = headers.indexOf('Subject')
       var idxOverall = headers.indexOf('Overall')
 
       for (var i = 1; i < lines.length; i++) {
         var cols = parseCsvLine(lines[i])
-        var name    = (cols[idxName]    || '').trim()
+        var id      = (cols[idxId]      || '').trim()
         var subject = (cols[idxSubject] || '').trim()
         var overall = (cols[idxOverall] || '').trim()
-        if (!name || !subject || !overall) continue
-        var key = name.toLowerCase() + '|' + subject.toLowerCase()
+        if (!id || !subject || !overall) continue
+        var key = id.toLowerCase() + '|' + subject.toLowerCase()
         csvGpaLookup[key] = parseFloat(overall)
       }
       csvLoaded = true
@@ -71,8 +71,8 @@ $(document).ready(function() {
     })
   }
 
-  function getCsvGpa(studentName, subjectCode) {
-    var key = studentName.toLowerCase() + '|' + subjectCode.toLowerCase()
+  function getCsvGpa(studentId, subjectCode) {
+    var key = studentId.toLowerCase() + '|' + subjectCode.toLowerCase()
     return csvGpaLookup.hasOwnProperty(key) ? csvGpaLookup[key] : null
   }
 
@@ -847,6 +847,9 @@ $(document).ready(function() {
   function loadExcend(results, activityId, cycleId, excBody, subjectCode) {
     $.each(results.d.entities, function() {
       var studentName = this.name
+      // Student ID as it appears in the CSV export — Compass exposes this as
+      // 'uii' (user import identifier) on most entity payloads, e.g. "ABD0002"
+      var studentId = this.uii || this.importIdentifier || this.code || ''
       var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
       $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
       var ex = [], en = true
@@ -866,22 +869,29 @@ $(document).ready(function() {
         if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") en = false
       })
 
-      // GPA source: master CSV (matched by student name + subject code)
-      var csvGpa = getCsvGpa(studentName, subjectCode)
-      var gpa, gpaLabel
+      // GPA source: master CSV (matched by student ID + subject code)
+      var csvGpa = studentId ? getCsvGpa(studentId, subjectCode) : null
+      var gpa, gpaLabel, labelColor
 
       if (csvGpa !== null) {
         gpa = csvGpa
         gpaLabel = `GPA ${gpa.toFixed(2)}`
+        labelColor = '#6b7280'
       } else if (!csvLoaded && !csvLoadFailed) {
         gpa = null
         gpaLabel = 'GPA loading…'
+        labelColor = '#9ca3af'
+      } else if (!studentId) {
+        gpa = null
+        gpaLabel = 'GPA — no student ID'
+        labelColor = '#dc2626'
       } else {
         gpa = null
         gpaLabel = 'GPA — no CSV match'
+        labelColor = '#dc2626'
       }
 
-      var gpaEl = $('<div>').text(gpaLabel).css({ fontSize: '11px', color: csvGpa !== null ? '#6b7280' : '#dc2626' }).appendTo(row)
+      $('<div>').text(gpaLabel).css({ fontSize: '11px', color: labelColor }).appendTo(row)
 
       if (gpa !== null && gpa >= 3.75 && en) {
         var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
