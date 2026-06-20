@@ -12,7 +12,7 @@ $(document).ready(function() {
 
   // ── AEU state ──────────────────────────────────────────────────────────
   var aeuActive = false
-  var AEU_EXEMPT_FIELDS = ['teacher comments', 'areas for improvement']
+  var AEU_EXEMPT_FIELDS = ['teacher comment', 'areas for improvement']
 
   function isAeuExempt(fieldName) {
     if (!aeuActive) return false
@@ -269,6 +269,74 @@ $(document).ready(function() {
     #dash .rc-issue-sev.warning { background: #fef3c7; color: #92400e; }
     #dash .rc-issue-sev.info    { background: #f3f4f6; color: #6b7280; }
 
+    /* ── Option C: two-column summary groups ── */
+    #dash .rc-summary-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    #dash .rc-summary-group {
+      border: 1px solid #e2e5ea;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #dash .rc-summary-group-hdr {
+      padding: 6px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    #dash .rc-summary-group.lt .rc-summary-group-hdr {
+      background: #eff6ff; border-bottom: 1px solid #bfdbfe; color: #1d40ae;
+    }
+    #dash .rc-summary-group.sem .rc-summary-group-hdr {
+      background: #f0fdf4; border-bottom: 1px solid #bbf7d0; color: #15803d;
+    }
+    #dash .rc-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      border-bottom: 1px solid #f3f4f6;
+      cursor: pointer;
+      user-select: none;
+    }
+    #dash .rc-summary-row:last-child { border-bottom: none; }
+    #dash .rc-summary-row:hover { background: #f9fafb; }
+    #dash .rc-summary-row-label { flex: 1; color: #374151; }
+    #dash .rc-summary-count {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+    #dash .rc-summary-count.error   { background: #fee2e2; color: #991b1b; }
+    #dash .rc-summary-count.warning { background: #fef3c7; color: #92400e; }
+    #dash .rc-summary-detail {
+      display: none;
+      padding: 6px 10px 8px 22px;
+      background: #fafbfc;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.7;
+    }
+    #dash .rc-summary-row.open + .rc-summary-detail { display: block; }
+    #dash .rc-summary-chevron {
+      font-size: 9px;
+      color: #9ca3af;
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+    #dash .rc-summary-row.open .rc-summary-chevron { transform: rotate(90deg); }
+    #dash .rc-summary-empty {
+      padding: 10px;
+      font-size: 11.5px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
       padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
@@ -282,7 +350,82 @@ $(document).ready(function() {
       #dash .rc-topbar-btn { display: none !important; }
       #dash .rc-staff-body,
       #dash .rc-activity-body,
-      #dash .rc-issue-group-body { display: block !important; }
+      #dash .rc-summary-detail { display: block !important; }
+    }
+
+    /* ── Two-column grouped issue layout (Option C) ── */
+    #dash .rc-issue-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #dash .rc-issue-col {
+      border: 1px solid #e2e5ea;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #dash .rc-issue-col-hdr {
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    #dash .rc-issue-col.col-lt .rc-issue-col-hdr {
+      background: #eff6ff;
+      border-bottom: 1px solid #bfdbfe;
+      color: #1d40ae;
+    }
+    #dash .rc-issue-col.col-sem .rc-issue-col-hdr {
+      background: #fff7ed;
+      border-bottom: 1px solid #fed7aa;
+      color: #9a3412;
+    }
+    #dash .rc-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-bottom: 1px solid #f9fafb;
+      font-size: 11.5px;
+      color: #374151;
+      cursor: pointer;
+    }
+    #dash .rc-summary-row:hover { background: #f9fafb; }
+    #dash .rc-summary-row:last-child { border-bottom: none; }
+    #dash .rc-summary-label { flex: 1; }
+    #dash .rc-summary-chevron {
+      font-size: 9px;
+      color: #9ca3af;
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+    #dash .rc-summary-row.open .rc-summary-chevron { transform: rotate(90deg); }
+    #dash .rc-count-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+    #dash .rc-count-badge.error   { background: #fee2e2; color: #991b1b; }
+    #dash .rc-count-badge.warning { background: #fef3c7; color: #92400e; }
+    #dash .rc-summary-detail {
+      display: none;
+      padding: 0 12px 8px 28px;
+      background: #fafbfc;
+    }
+    #dash .rc-summary-row.open + .rc-summary-detail { display: block; }
+    #dash .rc-detail-item {
+      font-size: 11px;
+      color: #6b7280;
+      padding: 3px 0;
+      line-height: 1.5;
+    }
+    #dash .rc-issue-col-empty {
+      padding: 12px;
+      font-size: 11.5px;
+      color: #9ca3af;
+      text-align: center;
     }
   </style></div>`).appendTo('body')
 
@@ -504,31 +647,46 @@ $(document).ready(function() {
       var elemDiv  = $('<div>').appendTo(actHdr)
 
       var actBody  = $('<div>').addClass('rc-activity-body').appendTo(actDiv)
-      var issueGrps = $('<div>').addClass('rc-issue-groups').appendTo(actBody)
+      var summaryCols = $('<div>').addClass('rc-summary-cols').appendTo(actBody)
 
-      function makeGroup(id, type, label) {
-        var grp = $('<div>').addClass(`rc-issue-group group-${type}`).attr('id', id).appendTo(issueGrps)
-        var ghdr = $('<div>').addClass('rc-issue-group-header').click(function() {
-          grp.toggleClass('open')
-        }).appendTo(grp)
-        $('<span>').text(label).appendTo(ghdr)
-        var badge = $('<span>').addClass('rc-group-badge').text('0').appendTo(ghdr)
-        var gbody = $('<div>').addClass('rc-issue-group-body').appendTo(grp)
+      // ── Summary group factory (Option C) ──
+      // Groups issues by FIELD/ISSUE TYPE rather than listing every student.
+      // Each row shows a count badge; click to expand and see affected names.
+      function makeSummaryGroup(colClass, label) {
+        var grp = $('<div>').addClass(`rc-summary-group ${colClass}`).appendTo(summaryCols)
+        $('<div>').addClass('rc-summary-group-hdr').text(label).appendTo(grp)
+        var body = $('<div>').appendTo(grp)
+        var rows = {} // key -> { row, detail, names: [], sev }
         return {
-          grp: grp, badge: badge, body: gbody, count: 0,
-          add: function(text, sev) {
-            this.count++
-            badge.text(this.count)
-            grp.addClass('open')
-            var row = $('<div>').addClass('rc-issue-item').appendTo(gbody)
-            $('<span>').addClass(`rc-issue-sev ${sev}`).text(sev).appendTo(row)
-            $('<div>').text(text).appendTo(row)
+          grp: grp, body: body, rows: rows,
+          totalCount: function() {
+            return Object.keys(rows).reduce((sum, k) => sum + rows[k].names.length, 0)
+          },
+          add: function(key, name, sev) {
+            if (!rows[key]) {
+              var row = $('<div>').addClass('rc-summary-row').appendTo(body)
+              $('<span>').addClass('rc-summary-chevron').text('▶').appendTo(row)
+              $('<span>').addClass('rc-summary-row-label').text(key).appendTo(row)
+              var count = $('<span>').addClass(`rc-summary-count ${sev}`).appendTo(row)
+              var detail = $('<div>').addClass('rc-summary-detail').appendTo(body)
+              row.click(function() { row.toggleClass('open') })
+              rows[key] = { row: row, count: count, detail: detail, names: [], sev: sev }
+            }
+            var r = rows[key]
+            if (name && !r.names.includes(name)) r.names.push(name)
+            r.count.text(r.names.length + (r.names.length === 1 ? ' student' : ' students'))
+            r.detail.text(r.names.join(', '))
+          },
+          renderEmptyIfNone: function() {
+            if (Object.keys(rows).length === 0) {
+              $('<div>').addClass('rc-summary-empty').text('No issues').appendTo(body)
+            }
           }
         }
       }
 
-      var setupGroup   = makeGroup(`grp-setup-${entityId}`,   'setup',   'Setup Issues')
-      var resultsGroup = makeGroup(`grp-results-${entityId}`, 'results', 'Task Results Missing')
+      var ltGroup  = makeSummaryGroup('lt',  'Compass Learning Task issues')
+      var semGroup = makeSummaryGroup('sem', 'Semester Reporting issues')
 
       function markSeverity(sev) {
         if (sev === 'error') {
@@ -543,8 +701,8 @@ $(document).ready(function() {
       var storedTaskData, storedReportData, storedEnrolments
 
       function renderIssues() {
-        setupGroup.body.empty(); setupGroup.count = 0; setupGroup.badge.text('0')
-        resultsGroup.body.empty(); resultsGroup.count = 0; resultsGroup.badge.text('0')
+        ltGroup.body.empty();  ltGroup.rows  = {}
+        semGroup.body.empty(); semGroup.rows = {}
         dot.removeClass('dot-red dot-amber').addClass('dot-blue')
         katsDiv.empty(); elemDiv.empty()
 
@@ -554,8 +712,8 @@ $(document).ready(function() {
         if (!dot.hasClass('dot-red') && !dot.hasClass('dot-amber')) {
           dot.removeClass('dot-blue').addClass('dot-green')
         }
-        setupGroup.count === 0   ? setupGroup.grp.hide()   : setupGroup.grp.show()
-        resultsGroup.count === 0 ? resultsGroup.grp.hide() : resultsGroup.grp.show()
+        ltGroup.renderEmptyIfNone()
+        semGroup.renderEmptyIfNone()
       }
 
       actDiv.data('rerender', renderIssues)
@@ -569,52 +727,53 @@ $(document).ready(function() {
           ))) return
 
           katCount++
-          var kat = $('<div>').addClass('rc-kat').text(`Task ${katCount}`).attr('title', t.name).appendTo(katsDiv)
+          // Real task name on the pill, truncated so it doesn't blow out the row
+          var shortName = t.name.length > 28 ? t.name.slice(0, 26) + '…' : t.name
+          var kat = $('<div>').addClass('rc-kat').text(shortName).attr('title', t.name).appendTo(katsDiv)
 
-          function setupErr(msg)  { setupGroup.add(msg, 'error');   if (!kat.hasClass('error')) kat.addClass('error'); markSeverity('error') }
-          function setupWarn(msg) { setupGroup.add(msg, 'warning'); if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning'); markSeverity('warning') }
-          function setupInfo(msg) { setupGroup.add(msg, 'info') }
+          function ltErr(key)  { ltGroup.add(key, null, 'error');   ltGroup.rows[key].names = ['—']; ltGroup.rows[key].count.text('error'); ltGroup.rows[key].detail.text(key); if (!kat.hasClass('error')) kat.addClass('error'); markSeverity('error') }
+          function ltWarn(key) { ltGroup.add(key, null, 'warning'); ltGroup.rows[key].names = ['—']; ltGroup.rows[key].count.text('warning'); ltGroup.rows[key].detail.text(key); if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning'); markSeverity('warning') }
 
           if (t.activityType && t.activityType !== 1) {
-            setupErr(`Task ${katCount} '${t.name}': assigned to a Class not a Subject — open the Learning Task and reassign it to the Subject`)
+            ltErr(`${shortName}: assigned to a Class not a Subject — reassign to the Subject`)
           }
           if (!t.semesterReportCycles || !t.semesterReportCycles.length) {
-            setupErr(`Task ${katCount} '${t.name}': not linked to a reporting cycle — edit Learning Task > Reporting and add Semester Report Cycle`)
+            ltErr(`${shortName}: not linked to a reporting cycle — add Semester Report Cycle`)
           }
           if (!t.taskReportDescription) {
-            setupErr(`Task ${katCount} '${t.name}': no description — edit Learning Task > Reporting > Task Summary Description`)
+            ltErr(`${shortName}: no description — add Task Summary Description`)
           }
           if (t.gradingItems && t.gradingItems.filter(function(g) { return g.includeInSemesterReport === true }).length < 1) {
-            setupErr(`Task ${katCount} '${t.name}': grading components disabled — edit Learning Task > Reporting and tick Components`)
+            ltErr(`${shortName}: grading components disabled — tick Components`)
           }
           if (t.securityOptions && t.securityOptions.filter(function(g) { return g.gradingVisible === false }).length) {
-            setupWarn(`Task ${katCount} '${t.name}': grading not visible — edit Learning Task > Basic and tick Grading Visible`)
+            ltWarn(`${shortName}: grading not visible — tick Grading Visible`)
           }
           if (t.taskReportDescription && t.taskReportDescription.includes("\n\n")) {
-            setupWarn(`Task ${katCount} '${t.name}': extra blank line in description — edit Learning Task > Reporting > Task Summary Description`)
+            ltWarn(`${shortName}: extra blank line in description`)
           }
           if (!(t.name.startsWith("Key Assessment Task") || t.name.startsWith("Unit") || t.name.startsWith("Exam") || t.name.startsWith("SAC") || t.name.startsWith("Semester") || t.name.startsWith("Structured"))) {
-            setupWarn(`Task ${katCount}: '${t.name}' does not follow naming format — edit Learning Task > Name`)
+            ltWarn(`${shortName}: does not follow naming format`)
           }
           if (!(t.taskTitleOnReport.startsWith("Key Assessment Task") || t.taskTitleOnReport.startsWith("Unit") || t.taskTitleOnReport.startsWith("Exam") || t.taskTitleOnReport.startsWith("SAC") || t.taskTitleOnReport.startsWith("Semester") || t.taskTitleOnReport.startsWith("Structured"))) {
-            setupWarn(`Task ${katCount}: title on report '${t.taskTitleOnReport}' does not follow naming format — edit Learning Task > Reporting > Title on Report`)
+            ltWarn(`${shortName}: title on report does not follow naming format`)
           }
           if (t.includeInOverall) {
-            setupWarn(`Task ${katCount} '${t.name}': is emphasised — edit Learning Task > Reporting and untick Emphasise in Task Summary`)
+            ltWarn(`${shortName}: is emphasised — untick Emphasise in Task Summary`)
           }
           if (t.showTaskDueDates) {
-            setupWarn(`Task ${katCount} '${t.name}': shows due date on report — edit Learning Task > Reporting and untick Display Task Due Dates`)
+            ltWarn(`${shortName}: shows due date on report — untick Display Task Due Dates`)
           }
           if (t.name.includes(" : ") || t.taskTitleOnReport.includes(" : ")) {
-            setupInfo(`Task ${katCount}: space before colon — edit Learning Task and fix`)
+            ltWarn(`${shortName}: space before colon in name`)
           }
           if (!t.dueDateTimestamp) {
-            setupInfo(`Task ${katCount} '${t.name}': no due date — edit Learning Task and add Due Date`)
+            ltWarn(`${shortName}: no due date`)
           }
 
           $.each(t.students, function() {
             if (!this.results.length && classlist && classlist.includes(this.userId)) {
-              resultsGroup.add(`Task ${katCount} '${t.name}': results missing for ${this.userName}`, 'error')
+              ltGroup.add(`${shortName}: results missing`, this.userName, 'error')
               if (!kat.hasClass('error')) kat.addClass('error')
               markSeverity('error')
             }
@@ -635,10 +794,11 @@ $(document).ready(function() {
           } else {
             ctx = `minimum is ${minTasks} tasks`
           }
-          setupGroup.add(
-            `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${ctx}) — edit Learning Tasks > Reporting and check Semester Report Cycles are added`,
-            'warning'
-          )
+          var key = `Only ${katCount} task${katCount !== 1 ? 's' : ''} found (${ctx})`
+          ltGroup.add(key, null, 'warning')
+          ltGroup.rows[key].names = ['—']
+          ltGroup.rows[key].count.text('warning')
+          ltGroup.rows[key].detail.text('Check Semester Report Cycles are added to existing tasks.')
           markSeverity('warning')
         }
       }
@@ -656,7 +816,8 @@ $(document).ready(function() {
             if (fieldName === 'Classes Attended' || fieldName === 'Classes Not Present') return
 
             if (!this.value || (this.itemName == "Award" && this.value == "None")) {
-              setupGroup.add(`${studentName} — '${fieldName}' is missing`, 'error')
+              var key = `${fieldName} missing`
+              semGroup.add(key, studentName, 'error')
               elemPill.removeClass('complete').addClass('error').text('Incomplete')
               markSeverity('error')
             }
