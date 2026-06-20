@@ -1446,6 +1446,15 @@ $(document).ready(function() {
           (studentResults[0] || {}).displayValue || ''
         ).toString().trim()
 
+        // ── TEMPORARY DEBUG LOGGING — find the real grade field name ──
+        if (!window._excendDebugLogged) {
+          window._excendDebugLogged = true
+          console.log('EXCEND DEBUG — RAW student object for', student.userName || uid, '| task:', t.name)
+          console.log('EXCEND DEBUG — full student JSON:', JSON.stringify(student))
+          console.log('EXCEND DEBUG — full task object keys:', Object.keys(t))
+        }
+        // ── END TEMPORARY DEBUG LOGGING ──
+
         s.taskResults.push({ name: t.name, grade: headlineGrade || '—' })
 
         if (isDisqualifying(headlineGrade)) {
