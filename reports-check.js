@@ -1389,6 +1389,22 @@ $(document).ready(function() {
   function isOnTimeStatus(status) { return status === 3 }
 
   function loadExcend(results, tasks, entityId, cycleId, excBody) {
+    // ── TEMPORARY DEBUG LOGGING — remove once Excellence & Endeavour is confirmed working ──
+    // Open the browser console (F12 → Console tab) and look for "EXCEND DEBUG"
+    // entries when you click into a class. This prints exactly what Compass
+    // sent back for each task, so we can see whether reportCycleId actually
+    // matches the cycle currently selected in the dropdown.
+    console.log('═══ EXCEND DEBUG: cycleId selected in dropdown =', cycleId, typeof cycleId, '═══')
+    $.each(tasks.d.data, function() {
+      var t = this
+      console.log(
+        'EXCEND DEBUG — Task:', t.name,
+        '| semesterReportCycles:', JSON.stringify(t.semesterReportCycles),
+        '| students.length:', (t.students || []).length
+      )
+    })
+    // ── END TEMPORARY DEBUG LOGGING ──
+
     // Build per-student KAT submission + grade summary from the same task
     // data already used for the Setup Issues / Results Missing checks —
     // no separate fetch needed. Also collects a printable list of each
@@ -1397,7 +1413,17 @@ $(document).ready(function() {
 
     $.each(tasks.d.data, function() {
       var t = this
-      if (!t.includeInSemesterReports) return
+      // Same filter as processTaskIssues: includeInSemesterReports lives
+      // INSIDE each entry of semesterReportCycles, scoped to a cycle — it
+      // is NOT a top-level property on the task object itself. The
+      // previous `if (!t.includeInSemesterReports) return` checked a
+      // field that never exists on the real Compass task response, so
+      // every task was silently filtered out before any student was
+      // ever counted — which is exactly why every row showed "No KATs"
+      // regardless of how much real task data existed.
+      if (!(t.semesterReportCycles && t.semesterReportCycles.some(
+        function(s) { return s.includeInSemesterReports === true && s.reportCycleId == cycleId }
+      ))) return
       var isExamTask = /^Semester Exam/i.test(t.name)
 
       $.each(t.students, function() {
@@ -1458,6 +1484,20 @@ $(document).ready(function() {
       var allKatsOnTime    = allKatsSubmitted && summary.allOnTime
       var allKatsHighGrade = allKatsSubmitted && summary.allHighGrade
 
+      // ── TEMPORARY DEBUG LOGGING ──
+      console.log(
+        'EXCEND DEBUG —', studentName,
+        '| userId:', userId,
+        '| katSummary found:', !!katSummary[userId],
+        '| total tasks counted:', summary.total,
+        '| allSubmitted:', summary.allSubmitted,
+        '| allOnTime:', summary.allOnTime,
+        '| allHighGrade:', summary.allHighGrade,
+        '| disqualified:', summary.disqualified,
+        '| taskResults:', JSON.stringify(summary.taskResults)
+      )
+      // ── END TEMPORARY DEBUG LOGGING ──
+
       // Printed KAT results — visible directly in the row, e.g.
       // "KAT1: Working Above Expected Level, KAT2: Working At Expected Level"
       var katText = summary.taskResults.length
@@ -1470,6 +1510,14 @@ $(document).ready(function() {
       getGPA(entityId, cycleId).always(function(gpaResponse) {
         var gpa = extractGPA(gpaResponse, userId)
         gpaCell.text(gpa !== null ? `GPA ${gpa.toFixed(2)}` : 'GPA NA')
+
+        // ── TEMPORARY DEBUG LOGGING ──
+        console.log(
+          'EXCEND DEBUG —', studentName,
+          '| raw gpaResponse:', JSON.stringify(gpaResponse).substring(0, 300),
+          '| extracted gpa:', gpa
+        )
+        // ── END TEMPORARY DEBUG LOGGING ──
 
         var gpaMeetsBar = gpa !== null && gpa >= 3.75
         var award = null
