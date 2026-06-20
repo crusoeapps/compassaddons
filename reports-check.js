@@ -21,6 +21,61 @@ $(document).ready(function() {
     })
   }
 
+  // ── Progress Report CSV (master GPA source) ──────────────────────────────
+  // Hosted at the same repo as this script. Auto-fetched once per session.
+  // Used instead of the live Gpa.svc API, which is currently unreliable.
+  var CSV_URL = 'https://crusoeapps.github.io/compassaddons/Progress_Report_-_Term_Two_2026.csv'
+  var csvGpaLookup = {}     // key: "name|subject" -> gpa float
+  var csvLoaded = false
+  var csvLoadFailed = false
+
+  function parseCsvLine(line) {
+    var result = []
+    var cur = ''
+    var inQuotes = false
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i]
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++ }
+        else inQuotes = !inQuotes
+      } else if (ch === ',' && !inQuotes) {
+        result.push(cur); cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    result.push(cur)
+    return result
+  }
+
+  function loadProgressCsv() {
+    return $.get(CSV_URL).done(function(text) {
+      var lines = text.split(/\r?\n/).filter(function(l) { return l.trim().length })
+      var headers = parseCsvLine(lines[0]).map(function(h) { return h.trim() })
+      var idxName    = headers.indexOf('Name')
+      var idxSubject = headers.indexOf('Subject')
+      var idxOverall = headers.indexOf('Overall')
+
+      for (var i = 1; i < lines.length; i++) {
+        var cols = parseCsvLine(lines[i])
+        var name    = (cols[idxName]    || '').trim()
+        var subject = (cols[idxSubject] || '').trim()
+        var overall = (cols[idxOverall] || '').trim()
+        if (!name || !subject || !overall) continue
+        var key = name.toLowerCase() + '|' + subject.toLowerCase()
+        csvGpaLookup[key] = parseFloat(overall)
+      }
+      csvLoaded = true
+    }).fail(function() {
+      csvLoadFailed = true
+    })
+  }
+
+  function getCsvGpa(studentName, subjectCode) {
+    var key = studentName.toLowerCase() + '|' + subjectCode.toLowerCase()
+    return csvGpaLookup.hasOwnProperty(key) ? csvGpaLookup[key] : null
+  }
+
   // ── Year level & minimum task logic ──────────────────────────────────────
   var HIGH_TASK_SUBJECTS = ['English', 'Mathematics']
   var CORE_SUBJECTS      = ['English', 'Mathematics', 'Humanities', 'Science', 'Physical Education']
@@ -340,6 +395,15 @@ $(document).ready(function() {
   })
 
   $('<div>').addClass('rc-spacer').appendTo(topbar)
+
+  var csvStatus = $('<div>').addClass('rc-topbar-btn').css({ cursor: 'default', color: '#9ca3af' }).text('Loading GPA data…').appendTo(topbar)
+  loadProgressCsv().always(function() {
+    if (csvLoadFailed) {
+      csvStatus.text('⚠ GPA CSV failed to load').css({ background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' })
+    } else {
+      csvStatus.text('✓ GPA data loaded (' + Object.keys(csvGpaLookup).length + ' records)').css({ background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0' })
+    }
+  })
 
   if (Compass.organisationUserRoles.ReportsAdmin) {
     $('<div>').addClass('rc-topbar-btn').text('Expand all').click(function() {
@@ -718,7 +782,7 @@ $(document).ready(function() {
 
           $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
           renderIssues()
-          loadExcend(results[0], activityId, cycleId, excBody)
+          loadExcend(results[0], activityId, cycleId, excBody, actName)
         }).done(function() {
           count++
           pf.css('width', (count / total * 100) + '%')
@@ -780,47 +844,51 @@ $(document).ready(function() {
     })
   }
 
-  function loadExcend(results, activityId, cycleId, excBody) {
-    var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
-    getGPA(activityId, GPAcycleId).always(function(gpas) {
-      $.each(results.d.entities, function() {
-        var studentName = this.name
-        var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
-        $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
-        var gp = [], ex = [], en = true
-        $.each(this.results, function() {
-          if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
-            var abbr = (this.displayValue.match(/\b([A-Z])/g) || [this.displayValue]).join('')
-            $('<div>').text(abbr).attr('title', this.displayValue).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-            ex.push(
-              this.displayValue == "Working Well Above Expected Level" ||
-              this.displayValue == "Working Above Expected Level" ||
-              this.displayValue == "Working At Expected Level" ||
-              this.displayValue == "Excellent" ||
-              parseInt(this.displayValue) >= 50 ||
-              (this.displayValue == "Absent" && this.itemName == "Semester Exam")
-            )
-          }
-          if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") en = false
-          if (this.itemName == "Work Habits") {
-            switch (this.value) {
-              case "Consistently": gp.push(4); break
-              case "Usually":      gp.push(3); break
-              case "Sometimes":    gp.push(2); break
-              case "Rarely":       gp.push(1); break
-            }
-          }
-        })
-        gp = gp.length ? gp : loadGPA(gpas, this.id)
-        var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length).toFixed(2) : "NA"
-        $('<div>').text(`GPA ${gpa}`).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
-        if (gpa >= 3.75 && en) {
-          var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
-          $('<div>').addClass('rc-excend-award').text(award).appendTo(row)
-        } else {
-          $('<div>').appendTo(row)
+  function loadExcend(results, activityId, cycleId, excBody, subjectCode) {
+    $.each(results.d.entities, function() {
+      var studentName = this.name
+      var row = $('<div>').addClass('rc-excend-row').appendTo(excBody)
+      $('<div>').addClass('rc-excend-name').text(studentName).appendTo(row)
+      var ex = [], en = true
+      $.each(this.results, function() {
+        if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
+          var abbr = (this.displayValue.match(/\b([A-Z])/g) || [this.displayValue]).join('')
+          $('<div>').text(abbr).attr('title', this.displayValue).css({ fontSize: '11px', color: '#6b7280' }).appendTo(row)
+          ex.push(
+            this.displayValue == "Working Well Above Expected Level" ||
+            this.displayValue == "Working Above Expected Level" ||
+            this.displayValue == "Working At Expected Level" ||
+            this.displayValue == "Excellent" ||
+            parseInt(this.displayValue) >= 50 ||
+            (this.displayValue == "Absent" && this.itemName == "Semester Exam")
+          )
         }
+        if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") en = false
       })
+
+      // GPA source: master CSV (matched by student name + subject code)
+      var csvGpa = getCsvGpa(studentName, subjectCode)
+      var gpa, gpaLabel
+
+      if (csvGpa !== null) {
+        gpa = csvGpa
+        gpaLabel = `GPA ${gpa.toFixed(2)}`
+      } else if (!csvLoaded && !csvLoadFailed) {
+        gpa = null
+        gpaLabel = 'GPA loading…'
+      } else {
+        gpa = null
+        gpaLabel = 'GPA — no CSV match'
+      }
+
+      var gpaEl = $('<div>').text(gpaLabel).css({ fontSize: '11px', color: csvGpa !== null ? '#6b7280' : '#dc2626' }).appendTo(row)
+
+      if (gpa !== null && gpa >= 3.75 && en) {
+        var award = (!ex.includes(false) && ex.length) ? "Excellence" : "Endeavour"
+        $('<div>').addClass('rc-excend-award').text(award).appendTo(row)
+      } else {
+        $('<div>').appendTo(row)
+      }
     })
   }
 
