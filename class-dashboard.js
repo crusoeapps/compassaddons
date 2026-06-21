@@ -1,3 +1,4 @@
+// Current version at 21 June 2026
 $(document).ready(function() {
 
 if (!window.single) {
@@ -240,8 +241,8 @@ var headers = {
   'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98% (fully explained absences).',
-  'Behaviour':       "Behaviour & conduct (1–4), across ALL of the student's classes (not just this one). Based ONLY on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour (negative points), and REAL Commendation (positive points). A single Detention or Suspension drops the score even with an otherwise clean record. Other chronicle categories are ignored.",
-  'Extra Curricular':'Involvement in non-classroom activities. 1=none, 2=one, 3=two–three, 4=four+ (inc. 2 non-sport).',
+  'Behaviour':       'Behaviour & conduct (1–4) for THIS class only. Negative: Out of Class without Explanation, REAL Behaviours Not Shown, Attitudes/Behaviour, Confiscation, Detention, Suspension. Positive: REAL Commendation. A single Detention or Suspension drops the score to 1 even with an otherwise clean record.',
+  'Extra Curricular':'Events attended (1=none, 2=one, 3=two–three, 4=four+), minus 1 point per Detention/Suspension entry, floored at 1.',
   'Total /20':       'Sum of all five scores. 19-20=Completion with Commendation, 12-18=Completion, 7-11=Participation, <7=Enrolment.'
 }
 
@@ -329,11 +330,9 @@ function getGPA(user) {
 // ── Load students & trigger all data calls ───────────────────────────────────
 function loadStudents(students) {
   students.d.sort((a, b) => a.uii.localeCompare(b.uii))
-  var userIds = []
 
   $.each(students.d, function() {
     var user = this.uid
-    userIds.push(user)
 
     $('<tr>').addClass('dash' + user).addClass(this.uii).appendTo('#dash tbody')
     $.each(Object.keys(headers), function() {
