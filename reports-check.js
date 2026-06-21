@@ -387,8 +387,8 @@ $(document).ready(function() {
     #dash .rc-excend-row {
       display: flex;
       align-items: flex-start;
-      gap: 8px;
-      padding: 6px 10px;
+      gap: 10px;
+      padding: 8px 10px;
       font-size: 11.5px;
       border-bottom: 1px solid #fef3c7;
     }
@@ -403,7 +403,15 @@ $(document).ready(function() {
     }
     #dash .rc-excend-tag.excellence { background: #dbeafe; color: #1d40ae; }
     #dash .rc-excend-tag.endeavour  { background: #dcfce7; color: #15803d; }
-    #dash .rc-excend-names { color: #374151; line-height: 1.6; }
+    #dash .rc-excend-names {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 3px 12px;
+      color: #374151;
+      line-height: 1.5;
+    }
+    #dash .rc-excend-names span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
@@ -905,13 +913,20 @@ $(document).ready(function() {
       // EXCELLENCE — ALL of:
       //   1. Progress Report GPA for this subject ≥ 3.75
       //   2. EVERY task submissionStatus is exactly 3 (on time) — no late, no overdue, no pending
-      //   3. The Overall Assessment/Performance/Grading:Achievement field is
+      //   3. EVERY task has a grade actually entered (results.length > 0)
+      //   4. The Overall Assessment/Performance/Grading:Achievement field is
       //      "Working Above Expected Level" or "Working Well Above Expected Level"
       //
       // ENDEAVOUR — ALL of:
       //   1. Progress Report GPA for this subject ≥ 3.75
       //   2. EVERY task is submitted (status 3 on time, OR 4 late) — pending/overdue disqualifies
-      //   3. The grade field is anything OTHER than "Not Assessed" or "Not Submitted"
+      //   3. EVERY task has a grade actually entered (results.length > 0)
+      //   4. The grade field is anything OTHER than "Not Assessed" or "Not Submitted"
+      //
+      // Rule 3 is the one that matters most in practice: a student can look
+      // perfect on paper (high GPA, good grade, all submitted) but still be
+      // missing a result on one individual task — that alone disqualifies
+      // them from any award until the missing grade is entered.
       //
       // A student can only receive one award — Excellence is checked first;
       // if they don't qualify for Excellence, Endeavour is checked next.
@@ -922,18 +937,22 @@ $(document).ready(function() {
         }
         var GPAcycleId = currentProgressCycleId
 
-        // Build userId -> { allOnTime, allSubmitted } from Learning Task data
+        // Build userId -> { allOnTime, allSubmitted, allGradesEntered } from Learning Task data.
+        // allGradesEntered is the missing piece that let students through with
+        // an empty grade on one task (e.g. Sophie Wardell missing KAT 2) — an
+        // award should never be granted if any task has no result entered.
         var submissionByStudent = {}
         if (taskData && taskData.d && taskData.d.data) {
           $.each(taskData.d.data, function() {
             $.each(this.students, function() {
               var uid = this.userId
               if (!submissionByStudent[uid]) {
-                submissionByStudent[uid] = { allOnTime: true, allSubmitted: true }
+                submissionByStudent[uid] = { allOnTime: true, allSubmitted: true, allGradesEntered: true }
               }
               var rec = submissionByStudent[uid]
               if (this.submissionStatus !== 3) rec.allOnTime = false
               if (this.submissionStatus !== 3 && this.submissionStatus !== 4) rec.allSubmitted = false
+              if (!this.results || !this.results.length) rec.allGradesEntered = false
             })
           })
         }
@@ -957,34 +976,38 @@ $(document).ready(function() {
             var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
             if (gpa === null || gpa < 3.75) return // doesn't meet the GPA bar for either award
 
-            var sub = submissionByStudent[studentId] || { allOnTime: false, allSubmitted: false }
+            var sub = submissionByStudent[studentId] || { allOnTime: false, allSubmitted: false, allGradesEntered: false }
 
             // ── Excellence check ──
+            // Requires every task graded — a single missing grade disqualifies
+            // the student from any award, regardless of how strong the rest
+            // of their results look.
             var isExcellenceGrade = (gradeField == "Working Above Expected Level" || gradeField == "Working Well Above Expected Level")
-            if (sub.allOnTime && isExcellenceGrade) {
+            if (sub.allOnTime && sub.allGradesEntered && isExcellenceGrade) {
               excellenceNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
               return // already awarded Excellence, don't also check Endeavour
             }
 
             // ── Endeavour check ──
             var isEndeavourGrade = (gradeField !== "Not Assessed" && gradeField !== "Not Submitted" && gradeField != null)
-            if (sub.allSubmitted && isEndeavourGrade) {
+            if (sub.allSubmitted && sub.allGradesEntered && isEndeavourGrade) {
               endeavourNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
             }
           })
 
           excendCounts.text(`${excellenceNames.length} Excellence, ${endeavourNames.length} Endeavour`)
 
-          if (excellenceNames.length) {
-            var exRow = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
-            $('<span>').addClass('rc-excend-tag excellence').text('Excellence').appendTo(exRow)
-            $('<span>').addClass('rc-excend-names').text(excellenceNames.join(', ')).appendTo(exRow)
+          function renderAwardRow(label, sevClass, names) {
+            var row  = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
+            $('<span>').addClass(`rc-excend-tag ${sevClass}`).text(label).appendTo(row)
+            var grid = $('<div>').addClass('rc-excend-names').appendTo(row)
+            names.forEach(function(name) {
+              $('<span>').attr('title', name).text(name).appendTo(grid)
+            })
           }
-          if (endeavourNames.length) {
-            var enRow = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
-            $('<span>').addClass('rc-excend-tag endeavour').text('Endeavour').appendTo(enRow)
-            $('<span>').addClass('rc-excend-names').text(endeavourNames.join(', ')).appendTo(enRow)
-          }
+
+          if (excellenceNames.length) renderAwardRow('Excellence', 'excellence', excellenceNames)
+          if (endeavourNames.length)  renderAwardRow('Endeavour',  'endeavour',  endeavourNames)
           if (!excellenceNames.length && !endeavourNames.length) {
             $('<div>').addClass('rc-summary-empty').text('No students currently qualify').appendTo(excendBody)
           }
