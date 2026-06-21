@@ -487,43 +487,43 @@ function loadGPA(cycles) {
 // ── Behaviour ─────────────────────────────────────────────────────────────────
 // Score: 4=exemplary, 3=acceptable, 2=sometimes unacceptable, 1=frequently unacceptable
 //
-// REBUILT to use Andrew's original, proven endpoint: ChronicleV2.svc/
-// GetCategoryUsageCount, scoped to this CLASS (activityId) — not a
-// per-student feed call. This is the same API the original Reports Check
-// and Class Dashboard both used successfully before being rebuilt with
-// invented field names that never matched real Compass data.
+// Uses Andrew's original proven endpoint: ChronicleV2.svc/GetCategoryUsageCount,
+// scoped to this CLASS (activityId). Returns one entry per chronicle category
+// used in this class, each with counts[] of { StudentId, Grey, Green, Amber,
+// Red, TotalPoints }.
 //
-// GetCategoryUsageCount returns one entry per chronicle CATEGORY used in
-// this class, each with a counts[] array of { StudentId, Grey, Green,
-// Amber, Red, TotalPoints }. Sub-items (e.g. "Value of Aspiration" under
-// "REAL Commendation") are already aggregated into the parent category's
-// totals by Compass — we don't need to chase them individually.
+// ROOT CAUSE OF THE PREVIOUS BUG, CONFIRMED FROM REAL COMPASS DATA:
+// Compass prefixes/suffixes category display names with sorting symbols and
+// stray whitespace that don't show up when staff browse Chronicle settings.
+// The real GetChronicleCategories response (verified directly, not guessed)
+// returns names like:
+//   "- Out of Class without Explanation (S1)"   (not "Out of Class without Explanation")
+//   "^REAL Commendation "                          (leading ^, trailing space)
+//   "><REAL Behaviours - Not Shown"                (leading >< symbols)
+//   "Attitudes/Behaviour - Classroom Management"   ("Attitudes" plural, two sub-categories)
+//   "Detention "                                   (trailing space)
+// Exact string equality (===) against clean names therefore failed on EVERY
+// category, silently, with no error — explaining the complete blank result.
 //
-// Crusoe's real category names (confirmed against Compass Chronicle
-// settings, not guessed):
-//   Negative — ANY entry counts, regardless of Grey/Green/Amber/Red colour:
-//     - Out of Class without Explanation
-//     - REAL Behaviours - Not Shown
-//     - Attitude/Behaviour   (covers Classroom Management steps incl. detentions logged this way)
-//     - Confiscation
-//     - Detention             — a single entry alone drops the score
-//     - Suspension            — a single entry alone drops the score
-//   Positive:
-//     - REAL Commendation
-//
-// Category names must be looked up via ReferenceDataCache.svc/
-// GetChronicleCategories (categoryId -> name), exactly as Andrew did.
+// FIX: match using .includes() on a trimmed, lowercased core phrase instead
+// of exact equality. This survives whatever decorative symbols/whitespace
+// Compass staff add to category names for their own sorting purposes.
 
-var NEGATIVE_CATEGORY_NAMES = [
-  'Out of Class without Explanation',
-  'REAL Behaviours - Not Shown',
-  'Attitude/Behaviour',
-  'Confiscation',
-  'Detention',
-  'Suspension'
+var NEGATIVE_PATTERNS = [
+  'out of class without explanation',
+  'real behaviours - not shown',
+  'attitudes/behaviour',   // catches BOTH "Classroom Management" and "Other" sub-categories
+  'confiscation',
+  'detention',
+  'suspension'
 ]
-var SEVERE_CATEGORY_NAMES = ['Detention', 'Suspension'] // any single entry drops the score
-var COMMENDATION_CATEGORY_NAME = 'REAL Commendation'
+var SEVERE_PATTERNS = ['detention', 'suspension'] // any single entry drops the score
+var COMMENDATION_PATTERN = 'real commendation'
+
+function matchesAny(name, patterns) {
+  var clean = (name || '').trim().toLowerCase()
+  return patterns.some(function(p) { return clean.includes(p) })
+}
 
 function getChronicleUsage(activityId) {
   return compassPost("/Services/ChronicleV2.svc/GetCategoryUsageCount", {
@@ -550,9 +550,9 @@ function loadChronicleUsage(usage, categories) {
     var catName = catNameById[this.categoryId]
     if (!catName || !this.counts) return
 
-    var isNegative    = NEGATIVE_CATEGORY_NAMES.includes(catName)
-    var isSevere      = SEVERE_CATEGORY_NAMES.includes(catName)
-    var isCommendation = (catName === COMMENDATION_CATEGORY_NAME)
+    var isNegative      = matchesAny(catName, NEGATIVE_PATTERNS)
+    var isSevere         = matchesAny(catName, SEVERE_PATTERNS)
+    var isCommendation   = catName.trim().toLowerCase().includes(COMMENDATION_PATTERN)
 
     if (!isNegative && !isCommendation) return // category not relevant to Behaviour score
 
