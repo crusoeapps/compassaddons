@@ -626,9 +626,36 @@ $(document).ready(function() {
 
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
 
+  // The single Progress Report cycle ID used for Excellence & Endeavour GPA.
+  // Andrew's original tried to match Progress Report cycles to Semester
+  // Report cycles by exact start date, which silently fails if the dates
+  // don't line up exactly (very likely, since progress cycles usually run
+  // mid-term). Class Dashboard avoids this entirely by not needing a cycle
+  // ID — it calls GetOverallGraphData which returns the student's full GPA
+  // history with no cycle filter. For Reports Check we still need a
+  // subject-specific GPA (GetResultsByCycleAndActivity requires a cycle id),
+  // so instead of date-matching we just take the most recent Progress
+  // Report cycle available — the same "pick the current one" approach
+  // Class Dashboard uses via isRelevant for Learning Tasks.
+  var currentProgressCycleId = null
+
   getCycles().done(loadCycles)
-  getProgress().done(loadProgress)
-  getOpenProgress().done(loadProgress)
+  getProgress().done(pickMostRecentProgressCycle)
+  getOpenProgress().done(pickMostRecentProgressCycle)
+
+  function pickMostRecentProgressCycle(cycles) {
+    if (!cycles.d || !cycles.d.length) return
+    var sorted = cycles.d.slice().sort(function(a, b) {
+      return new Date(b.start) - new Date(a.start)
+    })
+    var mostRecent = sorted[0]
+    // Only overwrite if this batch's most recent cycle is newer than
+    // whatever we already have (since getProgress and getOpenProgress
+    // both call this function and either could return first)
+    if (!currentProgressCycleId || new Date(mostRecent.start) > currentProgressCycleId.start) {
+      currentProgressCycleId = { id: mostRecent.id, start: new Date(mostRecent.start) }
+    }
+  }
 
   // ── API: Cycles ───────────────────────────────────────────────────────────
   function getCycles() {
@@ -645,9 +672,8 @@ $(document).ready(function() {
     selectCycle.change()
   }
 
-  // Progress Report cycles run separately from Semester Report cycles.
-  // We match them by start date so each Semester Report cycle knows which
-  // Progress Report cycle to pull GPA from for Excellence & Endeavour.
+  // Fetches both published and currently-open Progress Report cycles.
+  // pickMostRecentProgressCycle (above) decides which one to actually use.
   function getProgress() {
     return $.ajax("/Services/Gpa.svc/GetPublishedCycles", {
       data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
@@ -658,13 +684,6 @@ $(document).ready(function() {
     return $.ajax("/Services/Gpa.svc/GetOpenCycles", {
       data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
       contentType: 'application/json', type: 'POST'
-    })
-  }
-  function loadProgress(cycles) {
-    $.each(cycles.d, function(i, n) {
-      var start = new Date(n.start)
-      start = new Date(start - start.getTimezoneOffset() * -60 * 1000).toLocaleDateString("en-GB")
-      $(`#dash select option[data-start="${start}"]`).attr("data-progress", n.id)
     })
   }
 
@@ -885,12 +904,11 @@ $(document).ready(function() {
       // A student can only receive one award — Excellence is checked first;
       // if they don't qualify for Excellence, Endeavour is checked next.
       function processExcellenceEndeavour(results, taskData, cycleId) {
-        var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
-
-        if (!GPAcycleId) {
-          excendCounts.text('No Progress Report cycle found for this period')
+        if (!currentProgressCycleId) {
+          excendCounts.text('No Progress Report cycle found')
           return
         }
+        var GPAcycleId = currentProgressCycleId.id
 
         // Build userId -> { allOnTime, allSubmitted } from Learning Task data
         var submissionByStudent = {}
