@@ -457,11 +457,43 @@ $(document).ready(function() {
   aeuCheck.on('change', function() {
     aeuActive = this.checked
     aeuLabel.toggleClass('active', aeuActive)
+    // Recompute every loaded activity's issues fresh
     $('.rc-activity').each(function() {
       var rerender = $(this).data('rerender')
       if (rerender) rerender()
     })
+    // Recompute stats bar and staff pills from scratch since error/warning
+    // counts may have changed after re-rendering
+    recomputeAllStats()
   })
+
+  function recomputeAllStats() {
+    stats = { complete: 0, warning: 0, error: 0, total: 0 }
+    $('.rc-activity').each(function() {
+      var dot = $(this).find('.rc-act-status-dot')
+      stats.total++
+      if (dot.hasClass('dot-red')) stats.error++
+      else if (dot.hasClass('dot-amber')) stats.warning++
+      else stats.complete++
+    })
+    updateStats()
+    // Recompute each staff pill based on its activities' current dot colours
+    $('.rc-staff-block').each(function() {
+      var staffBody = $(this).find('.rc-staff-body')
+      var dots = staffBody.find('.rc-act-status-dot')
+      if (!dots.length) return
+      var pill = $(this).find('.rc-staff-pill')
+      var err = dots.filter('.dot-red').length
+      var warn = dots.filter('.dot-amber').length
+      if (err > 0) {
+        pill.removeClass('loading warning complete').addClass('error').text('Errors')
+      } else if (warn > 0) {
+        pill.removeClass('loading error complete').addClass('warning').text('Warnings')
+      } else {
+        pill.removeClass('loading error warning').addClass('complete').text('Complete ✓')
+      }
+    })
+  }
 
   $('<div>').addClass('rc-spacer').appendTo(topbar)
 
@@ -707,7 +739,7 @@ $(document).ready(function() {
         katsDiv.empty(); elemDiv.empty()
 
         if (storedTaskData)   processTaskIssues(storedTaskData, storedEnrolments)
-        if (storedReportData) processReportIssues(storedReportData)
+        if (storedReportData) processReportIssues(storedReportData, storedTaskData)
 
         if (!dot.hasClass('dot-red') && !dot.hasClass('dot-amber')) {
           dot.removeClass('dot-blue').addClass('dot-green')
@@ -771,55 +803,13 @@ $(document).ready(function() {
             ltWarn(`${shortName}: no due date`)
           }
 
-          // Real task name in lowercase for Semester Exam detection
-          var isSemesterExam = t.name.toLowerCase().startsWith('semester exam')
-
           $.each(t.students, function() {
             var student = this
             if (!student.results.length && classlist && classlist.includes(student.userId)) {
               ltGroup.add(`${shortName}: results missing`, student.userName, 'error')
               if (!kat.hasClass('error')) kat.addClass('error')
               markSeverity('error')
-              return // skip further checks if no results at all
             }
-
-            // Check each grading result for this student on this task
-            $.each(student.results, function() {
-              var resultText = (this.displayValue || this.value || '').toString()
-
-              // 1. "Not Assessed" — warn, ask whether exemption or Not Submitted is correct
-              if (resultText === 'Not Assessed') {
-                ltGroup.add(
-                  `${shortName}: 'Not Assessed' grades — check Exemption list or change to Not Submitted`,
-                  student.userName,
-                  'warning'
-                )
-                if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
-                markSeverity('warning')
-              }
-
-              // 2. "Absent" — only flagged for Semester Exam tasks
-              if (isSemesterExam && resultText === 'Absent') {
-                ltGroup.add(
-                  `${shortName}: 'Absent' exam result — confirm this is correct`,
-                  student.userName,
-                  'warning'
-                )
-                if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
-                markSeverity('warning')
-              }
-
-              // 3. Submission status says Submitted (3=on time, 4=late) but grade text says Not Submitted
-              if ((student.submissionStatus === 3 || student.submissionStatus === 4) && resultText === 'Not Submitted') {
-                ltGroup.add(
-                  `${shortName}: marked submitted but grade shows 'Not Submitted' — check for mismatch`,
-                  student.userName,
-                  'warning'
-                )
-                if (!kat.hasClass('error') && !kat.hasClass('warning')) kat.addClass('warning')
-                markSeverity('warning')
-              }
-            })
           })
         })
 
@@ -846,23 +836,65 @@ $(document).ready(function() {
         }
       }
 
-      function processReportIssues(results) {
+      function processReportIssues(results, taskData) {
         var elemPill = elemDiv.find('.rc-elem-pill')
         if (!elemPill.length) {
           elemPill = $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
         }
+
+        // Build userId -> submissionStatus map from Learning Task data
+        // (matches Andrew's loadGPA pattern: cross-reference by numeric id, not name)
+        var submittedIds = {} // userId -> true if submitted (status 3 or 4) on ANY task
+        if (taskData && taskData.d && taskData.d.data) {
+          $.each(taskData.d.data, function() {
+            $.each(this.students, function() {
+              if (this.submissionStatus === 3 || this.submissionStatus === 4) {
+                submittedIds[this.userId] = true
+              }
+            })
+          })
+        }
+
         $.each(results.d.entities, function() {
           var studentName = this.name
+          var studentId   = this.id // numeric id — same space as Learning Task userId (per Andrew's loadGPA)
+
           $.each(this.results, function() {
-            var fieldName = this.name || ''
+            var fieldName    = this.name || ''
+            var itemName     = this.itemName || ''
+            var displayValue = this.displayValue || ''
+
             if (isAeuExempt(fieldName)) return
             if (fieldName === 'Classes Attended' || fieldName === 'Classes Not Present') return
 
-            if (!this.value || (this.itemName == "Award" && this.value == "None")) {
+            // ── Missing field check (existing) ──
+            if (!this.value || (itemName == "Award" && this.value == "None")) {
               var key = `${fieldName} missing`
               semGroup.add(key, studentName, 'error')
               elemPill.removeClass('complete').addClass('error').text('Incomplete')
               markSeverity('error')
+              return // skip the warning checks below if it's already missing
+            }
+
+            // ── 1. "Not Assessed" — ask whether exemption or Not Submitted is correct ──
+            if (displayValue === 'Not Assessed') {
+              var k1 = `${fieldName}: 'Not Assessed' — check Exemption list or change to Not Submitted`
+              semGroup.add(k1, studentName, 'warning')
+              markSeverity('warning')
+            }
+
+            // ── 2. "Absent" — only flagged when the item is a Semester Exam ──
+            if (displayValue === 'Absent' && itemName.toLowerCase().includes('semester exam')) {
+              var k2 = `${fieldName}: 'Absent' exam result — confirm this is correct`
+              semGroup.add(k2, studentName, 'warning')
+              markSeverity('warning')
+            }
+
+            // ── 3. Marked submitted on a task but report shows Not Submitted ──
+            if (displayValue === 'Not Submitted' && submittedIds[studentId]) {
+              var k3 = `${fieldName}: marked submitted on a task but report shows 'Not Submitted' — check for mismatch`
+              semGroup.add(k3, studentName, 'warning')
+              markSeverity('warning')
             }
           })
         })
@@ -930,4 +962,3 @@ $(document).ready(function() {
   }
 
 })
-
