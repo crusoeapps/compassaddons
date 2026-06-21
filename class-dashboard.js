@@ -317,21 +317,6 @@ function getGPA(user) {
   return compassPost("/Services/Gpa.svc/GetOverallGraphData", { userId: user }, { user: user })
 }
 
-// Per-student chronicle feed across ALL classes the student is enrolled in
-// — not just the one class this dashboard happens to be open on. Behaviour
-// (detentions, suspensions, negative points etc.) can be logged by any
-// teacher in any subject, so scoping to a single activityId silently
-// excluded most of a student's real chronicle history. filterCategoryIds
-// is omitted to match the "All categories" default — we filter client-side
-// in loadChronicleForStudent instead, since we need every category present
-// to separate Commendations from the various negative categories.
-function getStudentChronicle(userId) {
-  return compassPost("/Services/ChronicleV2.svc/GetUserChronicleFeed", {
-    targetUserId: userId, startDate: startDate, endDate: endDate,
-    start: 0, pageSize: 200, asParent: false, page: 1, limit: 200
-  }, { user: userId })
-}
-
 // Events API returns event NAME and CATEGORY (unlike the generic attendance
 // summary endpoint), needed to filter for excursions/incursions only —
 // not all "Events" attendance, which can include detentions/suspensions
@@ -369,8 +354,15 @@ function loadStudents(students) {
     getTasks(user).done(loadTasks)
     getGPA(user).done(loadGPA)
     getEvents(user).done((data) => loadEvents(data, user))
-    getStudentChronicle(user).done((data) => loadChronicleForStudent(data, user))
   })
+
+  // Behaviour: ONE call for the whole class (not per student) — matches
+  // Andrew's original design. GetCategoryUsageCount returns every
+  // student's chronicle counts for this class in a single response.
+  $.when(getChronicleUsage(activityId), getChronicleCategories())
+    .done(function(usage, categories) {
+      loadChronicleUsage(usage[0], categories)
+    })
 }
 
 // ── Attendance ────────────────────────────────────────────────────────────────
@@ -488,85 +480,126 @@ function loadGPA(cycles) {
 // ── Behaviour ─────────────────────────────────────────────────────────────────
 // Score: 4=exemplary, 3=acceptable, 2=sometimes unacceptable, 1=frequently unacceptable
 //
-// RESTRICTED ALGORITHM — only these exact chronicle categories are considered.
-// All other categories (general chronicle notes, academic flags, parent contact
-// logs etc.) are ignored entirely, even if they carry points.
+// REBUILT to use Andrew's original, proven endpoint: ChronicleV2.svc/
+// GetCategoryUsageCount, scoped to this CLASS (activityId) — not a
+// per-student feed call. This is the same API the original Reports Check
+// and Class Dashboard both used successfully before being rebuilt with
+// invented field names that never matched real Compass data.
 //
-// Commendations: ONLY "REAL Commendation" category counts as positive.
-// Negative points / detentions / suspensions: ONLY from these exact categories:
-//   - Attitude/Behaviour
-//   - Out of Class
-//   - REAL Behaviour Not Shown
-//   - Non Negotiable Behaviour
-//   - Detention
-//   - Suspension
+// GetCategoryUsageCount returns one entry per chronicle CATEGORY used in
+// this class, each with a counts[] array of { StudentId, Grey, Green,
+// Amber, Red, TotalPoints }. Sub-items (e.g. "Value of Aspiration" under
+// "REAL Commendation") are already aggregated into the parent category's
+// totals by Compass — we don't need to chase them individually.
 //
-// Scoped per-STUDENT across ALL their classes (not just the class this
-// dashboard happens to be open on) — a detention logged by a Maths teacher
-// must count even when viewing this student from their Advisory/Science class.
+// Crusoe's real category names (confirmed against Compass Chronicle
+// settings, not guessed):
+//   Negative — ANY entry counts, regardless of Grey/Green/Amber/Red colour:
+//     - Out of Class without Explanation
+//     - REAL Behaviours - Not Shown
+//     - Attitude/Behaviour   (covers Classroom Management steps incl. detentions logged this way)
+//     - Confiscation
+//     - Detention             — a single entry alone drops the score
+//     - Suspension            — a single entry alone drops the score
+//   Positive:
+//     - REAL Commendation
 //
-// A single severe incident (one Detention or one Suspension) drops the
-// score immediately, even with an otherwise clean record — confirmed
-// school rule, not just a cumulative points threshold.
+// Category names must be looked up via ReferenceDataCache.svc/
+// GetChronicleCategories (categoryId -> name), exactly as Andrew did.
 
-var COMMENDATION_CATEGORY = 'REAL Commendation'
-var NEGATIVE_CATEGORIES = [
+var NEGATIVE_CATEGORY_NAMES = [
+  'Out of Class without Explanation',
+  'REAL Behaviours - Not Shown',
   'Attitude/Behaviour',
-  'Out of Class',
-  'REAL Behaviour Not Shown',
-  'Non Negotiable Behaviour',
+  'Confiscation',
   'Detention',
   'Suspension'
 ]
+var SEVERE_CATEGORY_NAMES = ['Detention', 'Suspension'] // any single entry drops the score
+var COMMENDATION_CATEGORY_NAME = 'REAL Commendation'
 
-function loadChronicleForStudent(feed, user) {
-  var d = { detentions: 0, suspensions: 0, ocwe: 0, negPoints: 0, commendations: 0 }
+function getChronicleUsage(activityId) {
+  return compassPost("/Services/ChronicleV2.svc/GetCategoryUsageCount", {
+    type: 1, id: activityId
+  }, {})
+}
 
-  $.each(feed.d.data || feed.d || [], function() {
-    var entry = this
-    var catName = entry.category || entry.categoryName || ''
-    var points  = Number(entry.points) || 0
+function getChronicleCategories() {
+  return $.get("/Services/ReferenceDataCache.svc/GetChronicleCategories")
+}
 
-    if (catName === 'Detention') {
-      d.detentions++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === 'Suspension') {
-      d.suspensions++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === 'Out of Class') {
-      d.ocwe++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (NEGATIVE_CATEGORIES.includes(catName)) {
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === COMMENDATION_CATEGORY) {
-      if (points > 0) d.commendations += points
-    }
-    // Every other category is ignored entirely, regardless of points.
+// Behaviour data is fetched ONCE per class (not once per student) since
+// GetCategoryUsageCount already returns every student's counts for the
+// whole class in a single call — matching Andrew's original design.
+var behaviourByStudent = {} // userId -> { negEntries, severeEntries, commendations }
+
+function loadChronicleUsage(usage, categories) {
+  var catNameById = {}
+  $.each(categories.d, function() {
+    catNameById[this.id] = this.name
   })
 
+  $.each(usage.d, function() {
+    var catName = catNameById[this.categoryId]
+    if (!catName || !this.counts) return
+
+    var isNegative    = NEGATIVE_CATEGORY_NAMES.includes(catName)
+    var isSevere      = SEVERE_CATEGORY_NAMES.includes(catName)
+    var isCommendation = (catName === COMMENDATION_CATEGORY_NAME)
+
+    if (!isNegative && !isCommendation) return // category not relevant to Behaviour score
+
+    $.each(this.counts, function() {
+      var uid = this.StudentId
+      if (!behaviourByStudent[uid]) {
+        behaviourByStudent[uid] = { negEntries: 0, severeEntries: 0, commendations: 0 }
+      }
+      var rec = behaviourByStudent[uid]
+      var entryCount = (this.Grey || 0) + (this.Green || 0) + (this.Amber || 0) + (this.Red || 0)
+
+      if (isNegative)     rec.negEntries    += entryCount
+      if (isSevere)       rec.severeEntries += entryCount
+      if (isCommendation) rec.commendations += entryCount
+    })
+  })
+
+  // Now render every student row that's waiting on a Behaviour score
+  $.each(behaviourByStudent, function(uid) {
+    renderBehaviourScore(uid)
+  })
+}
+
+function renderBehaviourScore(user) {
+  var rec = behaviourByStudent[user]
+  var el  = $('.dash' + user + ' .behaviour')
+  if (!el.length) return // row not built yet
+
+  if (!rec) {
+    // No chronicle entries at all for this student in this class
+    el.empty().append(scoreBadge(4))
+    el.append($('<span>').addClass('detail-text').text('No entries'))
+    recordScore(user, 'behaviour', 4)
+    return
+  }
+
   var score
-  // A single severe incident drops the score immediately — confirmed
-  // school rule, independent of cumulative points.
-  if (d.detentions >= 1 || d.suspensions >= 1) {
-    score = (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) ? 1 : 2
-  } else if (d.negPoints >= 15) {
+  if (rec.severeEntries >= 1) {
+    score = 1 // a single Detention or Suspension entry alone drops the score
+  } else if (rec.negEntries >= 8) {
     score = 1
-  } else if (d.negPoints >= 8) {
+  } else if (rec.negEntries >= 4) {
     score = 2
-  } else if (d.commendations >= 12 && d.negPoints <= 2 && d.ocwe === 0) {
+  } else if (rec.commendations >= 12 && rec.negEntries === 0) {
     score = 4
   } else {
     score = 3
   }
 
   var detail = []
-  if (d.detentions)    detail.push(d.detentions + ' detention' + (d.detentions > 1 ? 's' : ''))
-  if (d.suspensions)   detail.push(d.suspensions + ' suspension' + (d.suspensions > 1 ? 's' : ''))
-  if (d.negPoints)     detail.push(d.negPoints + ' neg pts')
-  if (d.commendations) detail.push(d.commendations + ' commendations')
-  if (d.ocwe)          detail.push(d.ocwe + ' OCWE')
+  if (rec.severeEntries)  detail.push(rec.severeEntries + ' detention/suspension')
+  if (rec.negEntries)     detail.push(rec.negEntries + ' negative entries')
+  if (rec.commendations)  detail.push(rec.commendations + ' commendations')
 
-  var el = $('.dash' + user + ' .behaviour')
   el.empty()
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
