@@ -10,6 +10,28 @@ $(document).ready(function() {
     $('body #dash').remove()
   }
 
+  // ── Request queue ─────────────────────────────────────────────────────────
+  // Only this many classes fetch data from Compass at the same time.
+  // Without this, a teacher with 25 classes fires 75 requests all at once,
+  // which is what was causing the slow loading.
+  var MAX_CONCURRENT = 4
+  var queue = []
+  var runningCount = 0
+
+  function queueTask(fn) {
+    queue.push(fn)
+    runNext()
+  }
+  function runNext() {
+    if (runningCount >= MAX_CONCURRENT || queue.length === 0) return
+    runningCount++
+    var fn = queue.shift()
+    fn(function() {
+      runningCount--
+      runNext()
+    })
+  }
+
   // ── AEU state ──────────────────────────────────────────────────────────
   var aeuActive = false
   var AEU_EXEMPT_FIELDS = ['teacher comment', 'areas for improvement']
@@ -337,6 +359,52 @@ $(document).ready(function() {
       text-align: center;
     }
 
+    /* ── Excellence & Endeavour panel ── */
+    #dash .rc-excend-panel {
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    #dash .rc-excend-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: #fffbeb;
+      color: #92400e;
+      cursor: pointer;
+      user-select: none;
+    }
+    #dash .rc-excend-counts {
+      font-size: 11px;
+      font-weight: 500;
+      color: #b45309;
+    }
+    #dash .rc-excend-body { background: #fffefb; }
+    #dash .rc-excend-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      border-bottom: 1px solid #fef3c7;
+    }
+    #dash .rc-excend-row:last-child { border-bottom: none; }
+    #dash .rc-excend-tag {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+      margin-top: 1px;
+    }
+    #dash .rc-excend-tag.excellence { background: #dbeafe; color: #1d40ae; }
+    #dash .rc-excend-tag.endeavour  { background: #dcfce7; color: #15803d; }
+    #dash .rc-excend-names { color: #374151; line-height: 1.6; }
+
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
       padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
@@ -457,14 +525,26 @@ $(document).ready(function() {
   aeuCheck.on('change', function() {
     aeuActive = this.checked
     aeuLabel.toggleClass('active', aeuActive)
+    var rerendered = 0
     // Recompute every loaded activity's issues fresh
     $('.rc-activity').each(function() {
       var rerender = $(this).data('rerender')
-      if (rerender) rerender()
+      if (rerender) { rerender(); rerendered++ }
     })
     // Recompute stats bar and staff pills from scratch since error/warning
     // counts may have changed after re-rendering
     recomputeAllStats()
+    // Brief on-screen confirmation so it's obvious the toggle actually did something
+    var msg = aeuActive
+      ? `AEU Industrial Action ON — re-checked ${rerendered} class${rerendered !== 1 ? 'es' : ''}, Teacher Comment & Areas for Improvement now exempt`
+      : `AEU Industrial Action OFF — re-checked ${rerendered} class${rerendered !== 1 ? 'es' : ''}`
+    var toast = $('<div>').css({
+      position: 'fixed', top: '60px', right: '20px', zIndex: 10001,
+      background: aeuActive ? '#d97706' : '#374151', color: 'white',
+      padding: '8px 14px', borderRadius: '6px', fontSize: '12px',
+      fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+    }).text(msg).appendTo('body')
+    setTimeout(function() { toast.fadeOut(400, function() { toast.remove() }) }, 3000)
   })
 
   function recomputeAllStats() {
@@ -547,6 +627,8 @@ $(document).ready(function() {
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
 
   getCycles().done(loadCycles)
+  getProgress().done(loadProgress)
+  getOpenProgress().done(loadProgress)
 
   // ── API: Cycles ───────────────────────────────────────────────────────────
   function getCycles() {
@@ -561,6 +643,29 @@ $(document).ready(function() {
       if (i === 0) opt.attr('selected', 'selected')
     })
     selectCycle.change()
+  }
+
+  // Progress Report cycles run separately from Semester Report cycles.
+  // We match them by start date so each Semester Report cycle knows which
+  // Progress Report cycle to pull GPA from for Excellence & Endeavour.
+  function getProgress() {
+    return $.ajax("/Services/Gpa.svc/GetPublishedCycles", {
+      data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
+      contentType: 'application/json', type: 'POST'
+    })
+  }
+  function getOpenProgress() {
+    return $.ajax("/Services/Gpa.svc/GetOpenCycles", {
+      data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
+      contentType: 'application/json', type: 'POST'
+    })
+  }
+  function loadProgress(cycles) {
+    $.each(cycles.d, function(i, n) {
+      var start = new Date(n.start)
+      start = new Date(start - start.getTimezoneOffset() * -60 * 1000).toLocaleDateString("en-GB")
+      $(`#dash select option[data-start="${start}"]`).attr("data-progress", n.id)
+    })
   }
 
   // ── Cycle ─────────────────────────────────────────────────────────────────
@@ -720,6 +825,18 @@ $(document).ready(function() {
       var ltGroup  = makeSummaryGroup('lt',  'Compass Learning Task issues')
       var semGroup = makeSummaryGroup('sem', 'Semester Reporting issues')
 
+      // ── Excellence & Endeavour panel ──
+      // Sits below the two issue groups since it's a recommendation list,
+      // not an issue list. GPA comes from the Progress Report only (per
+      // school decision — Andrew's original "Work Habits" fallback is
+      // deliberately NOT used here).
+      var excendPanel = $('<div>').addClass('rc-excend-panel').appendTo(actBody)
+      var excendHdr   = $('<div>').addClass('rc-excend-hdr').appendTo(excendPanel)
+      $('<span>').text('🏆 Excellence & Endeavour').appendTo(excendHdr)
+      var excendCounts = $('<span>').addClass('rc-excend-counts').appendTo(excendHdr)
+      var excendBody   = $('<div>').addClass('rc-excend-body').hide().appendTo(excendPanel)
+      excendHdr.click(function() { excendBody.toggle() })
+
       function markSeverity(sev) {
         if (sev === 'error') {
           dot.removeClass('dot-blue dot-amber').addClass('dot-red')
@@ -735,11 +852,13 @@ $(document).ready(function() {
       function renderIssues() {
         ltGroup.body.empty();  ltGroup.rows  = {}
         semGroup.body.empty(); semGroup.rows = {}
+        excendBody.empty()
         dot.removeClass('dot-red dot-amber').addClass('dot-blue')
         katsDiv.empty(); elemDiv.empty()
 
         if (storedTaskData)   processTaskIssues(storedTaskData, storedEnrolments)
         if (storedReportData) processReportIssues(storedReportData, storedTaskData)
+        if (storedReportData) processExcellenceEndeavour(storedReportData, storedTaskData, cycleId)
 
         if (!dot.hasClass('dot-red') && !dot.hasClass('dot-amber')) {
           dot.removeClass('dot-blue').addClass('dot-green')
@@ -749,6 +868,98 @@ $(document).ready(function() {
       }
 
       actDiv.data('rerender', renderIssues)
+
+      // ── Excellence & Endeavour calculation (rebuilt to school rules) ──
+      //
+      // EXCELLENCE — ALL of:
+      //   1. Progress Report GPA for this subject ≥ 3.75
+      //   2. EVERY task submissionStatus is exactly 3 (on time) — no late, no overdue, no pending
+      //   3. The Overall Assessment/Performance/Grading:Achievement field is
+      //      "Working Above Expected Level" or "Working Well Above Expected Level"
+      //
+      // ENDEAVOUR — ALL of:
+      //   1. Progress Report GPA for this subject ≥ 3.75
+      //   2. EVERY task is submitted (status 3 on time, OR 4 late) — pending/overdue disqualifies
+      //   3. The grade field is anything OTHER than "Not Assessed" or "Not Submitted"
+      //
+      // A student can only receive one award — Excellence is checked first;
+      // if they don't qualify for Excellence, Endeavour is checked next.
+      function processExcellenceEndeavour(results, taskData, cycleId) {
+        var GPAcycleId = $(`#dash select option[value="${cycleId}"]`).attr("data-progress")
+
+        if (!GPAcycleId) {
+          excendCounts.text('No Progress Report cycle found for this period')
+          return
+        }
+
+        // Build userId -> { allOnTime, allSubmitted } from Learning Task data
+        var submissionByStudent = {}
+        if (taskData && taskData.d && taskData.d.data) {
+          $.each(taskData.d.data, function() {
+            $.each(this.students, function() {
+              var uid = this.userId
+              if (!submissionByStudent[uid]) {
+                submissionByStudent[uid] = { allOnTime: true, allSubmitted: true }
+              }
+              var rec = submissionByStudent[uid]
+              if (this.submissionStatus !== 3) rec.allOnTime = false
+              if (this.submissionStatus !== 3 && this.submissionStatus !== 4) rec.allSubmitted = false
+            })
+          })
+        }
+
+        getGPA(activityId, GPAcycleId).always(function(gpas) {
+          var excellenceNames = []
+          var endeavourNames  = []
+
+          $.each(results.d.entities, function() {
+            var studentName = this.name
+            var studentId   = this.id
+
+            var gradeField = null // the Overall Assessment / Performance / Grading: Achievement text
+            $.each(this.results, function() {
+              if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
+                gradeField = this.displayValue
+              }
+            })
+
+            var gp  = loadGPA(gpas, studentId)
+            var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
+            if (gpa === null || gpa < 3.75) return // doesn't meet the GPA bar for either award
+
+            var sub = submissionByStudent[studentId] || { allOnTime: false, allSubmitted: false }
+
+            // ── Excellence check ──
+            var isExcellenceGrade = (gradeField == "Working Above Expected Level" || gradeField == "Working Well Above Expected Level")
+            if (sub.allOnTime && isExcellenceGrade) {
+              excellenceNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
+              return // already awarded Excellence, don't also check Endeavour
+            }
+
+            // ── Endeavour check ──
+            var isEndeavourGrade = (gradeField !== "Not Assessed" && gradeField !== "Not Submitted" && gradeField != null)
+            if (sub.allSubmitted && isEndeavourGrade) {
+              endeavourNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
+            }
+          })
+
+          excendCounts.text(`${excellenceNames.length} Excellence, ${endeavourNames.length} Endeavour`)
+
+          if (excellenceNames.length) {
+            var exRow = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
+            $('<span>').addClass('rc-excend-tag excellence').text('Excellence').appendTo(exRow)
+            $('<span>').addClass('rc-excend-names').text(excellenceNames.join(', ')).appendTo(exRow)
+          }
+          if (endeavourNames.length) {
+            var enRow = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
+            $('<span>').addClass('rc-excend-tag endeavour').text('Endeavour').appendTo(enRow)
+            $('<span>').addClass('rc-excend-names').text(endeavourNames.join(', ')).appendTo(enRow)
+          }
+          if (!excellenceNames.length && !endeavourNames.length) {
+            $('<div>').addClass('rc-summary-empty').text('No students currently qualify').appendTo(excendBody)
+          }
+        })
+      }
 
       function processTaskIssues(tasks, classlist) {
         var katCount = 0
@@ -876,63 +1087,71 @@ $(document).ready(function() {
               return // skip the warning checks below if it's already missing
             }
 
-            // ── 1. "Not Assessed" — ask whether exemption or Not Submitted is correct ──
-            if (displayValue === 'Not Assessed') {
-              var k1 = `${fieldName}: 'Not Assessed' — check Exemption list or change to Not Submitted`
-              semGroup.add(k1, studentName, 'warning')
-              markSeverity('warning')
-            }
-
-            // ── 2. "Absent" — only flagged when the item is a Semester Exam ──
+            // ── "Absent" exam result — Learning Task issues, not Semester Reporting ──
+            // (this reflects a task-grading outcome on a Semester Exam, same family as
+            // Not Assessed and the submitted/Not Submitted mismatch below)
             if (displayValue === 'Absent' && itemName.toLowerCase().includes('semester exam')) {
               var k2 = `${fieldName}: 'Absent' exam result — confirm this is correct`
-              semGroup.add(k2, studentName, 'warning')
+              ltGroup.add(k2, studentName, 'warning')
               markSeverity('warning')
             }
 
-            // ── 3. Marked submitted on a task but report shows Not Submitted ──
+            // ── "Not Assessed" — Compass Learning Task issues ──
+            // (this reflects a task-grading outcome, not a report-field issue)
+            if (displayValue === 'Not Assessed') {
+              var k1 = `${fieldName}: 'Not Assessed' — check Exemption list or change to Not Submitted`
+              ltGroup.add(k1, studentName, 'warning')
+              markSeverity('warning')
+            }
+
+            // ── Marked submitted on a task but report shows Not Submitted ──
+            // (Compass Learning Task issues — this is a task/report mismatch)
             if (displayValue === 'Not Submitted' && submittedIds[studentId]) {
               var k3 = `${fieldName}: marked submitted on a task but report shows 'Not Submitted' — check for mismatch`
-              semGroup.add(k3, studentName, 'warning')
+              ltGroup.add(k3, studentName, 'warning')
               markSeverity('warning')
             }
           })
         })
       }
 
-      $.when(getReports(entityId, cycleId), getTasks(activityId), getEnrolments(activityId))
-        .done(function(results, tasks, enrolments) {
-          storedTaskData   = tasks[0]
-          storedReportData = results[0]
-          storedEnrolments = loadEnrolments(enrolments[0])
+      queueTask(function(done) {
+        $.when(getReports(entityId, cycleId), getTasks(activityId), getEnrolments(activityId))
+          .done(function(results, tasks, enrolments) {
+            storedTaskData   = tasks[0]
+            storedReportData = results[0]
+            storedEnrolments = loadEnrolments(enrolments[0])
 
-          $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
-          renderIssues()
-        }).done(function() {
-          count++
-          pf.css('width', (count / total * 100) + '%')
+            $('<div>').addClass('rc-elem-pill complete').text('Complete').appendTo(elemDiv)
+            renderIssues()
+          }).done(function() {
+            count++
+            pf.css('width', (count / total * 100) + '%')
 
-          if (dot.hasClass('dot-red')) {
-            stats.error++
-          } else if (dot.hasClass('dot-amber')) {
-            stats.warning++
-          } else {
-            dot.removeClass('dot-blue').addClass('dot-green')
-            stats.complete++
-          }
-          updateStats()
-
-          if (count === total) {
-            pf.css('width', '100%')
-            if (hasError) {
-              pill.removeClass('loading warning complete').addClass('error').text('Errors')
-            } else if (hasWarning) {
-              pill.removeClass('loading error complete').addClass('warning').text('Warnings')
+            if (dot.hasClass('dot-red')) {
+              stats.error++
+            } else if (dot.hasClass('dot-amber')) {
+              stats.warning++
             } else {
-              pill.removeClass('loading error warning').addClass('complete').text('Complete ✓')
+              dot.removeClass('dot-blue').addClass('dot-green')
+              stats.complete++
             }
-          }
-        })
+            updateStats()
+
+            if (count === total) {
+              pf.css('width', '100%')
+              if (hasError) {
+                pill.removeClass('loading warning complete').addClass('error').text('Errors')
+              } else if (hasWarning) {
+                pill.removeClass('loading error complete').addClass('warning').text('Warnings')
+              } else {
+                pill.removeClass('loading error warning').addClass('complete').text('Complete ✓')
+              }
+            }
+          }).always(function() {
+            done() // tell the queue this class is finished, free up a slot
+          })
+      })
     })
   }
 
@@ -944,6 +1163,30 @@ $(document).ready(function() {
     })
   }
   function loadEnrolments(results) { return results.d.map(s => s.uid) }
+
+  // ── GPA (for Excellence & Endeavour) ────────────────────────────────────────
+  // Pulls the subject-specific GPA from the Progress Report for this class —
+  // NOT the school-wide overall GPA used in the Advisory Rubric Calculator.
+  // Andrew's original script also had a "Work Habits" fallback method; per
+  // a deliberate decision, this rebuild uses ONLY the Progress Report GPA.
+  function getGPA(activityId, progressCycleId) {
+    return $.ajax("/Services/Gpa.svc/GetResultsByCycleAndActivity", {
+      data: JSON.stringify({ cycleId: progressCycleId, entityId: activityId, editing: false }),
+      contentType: 'application/json', type: 'POST'
+    })
+  }
+  function loadGPA(results, userId) {
+    try {
+      return results.d.entities
+        .filter(s => s.id == userId)[0] // match student by numeric id
+        .results.map(r => [r.result, results.d.aoas.filter(a => a.id == r.id)])
+        .map(a => a[1][0].options.filter(b => b.id == a[0]))
+        .map(a => a[0].value)
+        .filter(x => x)
+    } catch {
+      return false // no Progress Report GPA available for this student
+    }
+  }
 
   // ── Reports ───────────────────────────────────────────────────────────────
   function getReports(entityId, cycleId) {
