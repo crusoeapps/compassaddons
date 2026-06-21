@@ -406,12 +406,12 @@ $(document).ready(function() {
     #dash .rc-excend-names {
       flex: 1;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 3px 12px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 4px 16px;
       color: #374151;
       line-height: 1.5;
     }
-    #dash .rc-excend-names span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #dash .rc-excend-names span { white-space: nowrap; }
 
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
