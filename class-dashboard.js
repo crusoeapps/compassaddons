@@ -317,15 +317,14 @@ function getGPA(user) {
   return compassPost("/Services/Gpa.svc/GetOverallGraphData", { userId: user }, { user: user })
 }
 
-// Events API returns event NAME and CATEGORY (unlike the generic attendance
-// summary endpoint), needed to filter for excursions/incursions only —
-// not all "Events" attendance, which can include detentions/suspensions
-// logged as events.
-function getEvents(userId) {
-  return compassPost("/Services/Activities/Events.svc/GetEventsByUserId", {
-    userId: userId, startDate: startDate, endDate: endDate, page: 1, start: 0, limit: 200
-  }, { user: userId })
-}
+// Extra Curricular events are NOT a separate API call — Andrew's original
+// design reads them directly out of the same GetAttendanceSummary response
+// already being fetched for the Attendance column. Within that response,
+// each entry in classes.d represents one "subject" the student is enrolled
+// in; Compass treats school events as a pseudo-subject named exactly
+// "Events", with this.ta ("total attended") as the event count. No
+// separate Events.svc endpoint exists or is needed — confirmed against
+// Andrew's proven original code, not invented.
 
 // ── Load students & trigger all data calls ───────────────────────────────────
 function loadStudents(students) {
@@ -353,7 +352,6 @@ function loadStudents(students) {
     getAllAttendance(user).done((data) => loadAllAttendance(data, user))
     getTasks(user).done(loadTasks)
     getGPA(user).done(loadGPA)
-    getEvents(user).done((data) => loadEvents(data, user))
   })
 
   // Behaviour: ONE call for the whole class (not per student) — matches
@@ -386,6 +384,11 @@ function loadAllAttendance(classes, user) {
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(pct + '%'))
   recordScore(user, 'attendance', score)
+
+  // Extra Curricular: read directly from this same attendance response,
+  // exactly as Andrew's original loadAttendance did — find the pseudo-
+  // subject named "Events" and use its "total attended" (ta) figure.
+  loadExtraCurricular(classes, user)
 }
 
 // ── KATs ──────────────────────────────────────────────────────────────────────
@@ -586,6 +589,7 @@ function renderBehaviourScore(user) {
     el.empty().append(scoreBadge(4))
     el.append($('<span>').addClass('detail-text').text('No entries'))
     recordScore(user, 'behaviour', 4)
+    applySevereCountToExtraCurricular(user, 0)
     return
   }
 
@@ -611,49 +615,79 @@ function renderBehaviourScore(user) {
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
   recordScore(user, 'behaviour', score)
+
+  // Feed the same Detention/Suspension count into Extra Curricular's
+  // subtraction rule (1 point off the Extra Curricular score per entry).
+  applySevereCountToExtraCurricular(user, rec.severeEntries || 0)
 }
 
 // ── Extra Curricular ──────────────────────────────────────────────────────────
 // Score: 1=0 events, 2=1 event, 3=2–3 events, 4=4+ events
-// Only counts events that are excursions or incursions — checked against
-// both the event NAME and CATEGORY name (case-insensitive). Events, school
-// activities, sport carnivals, detentions/suspensions logged as events etc.
-// are all ignored unless they explicitly read as an excursion/incursion.
-function isExcursionOrIncursion(eventName, categoryName) {
-  var name = (eventName || '').toLowerCase()
-  var cat  = (categoryName || '').toLowerCase()
-  return name.includes('excursion') || name.includes('incursion') ||
-         cat.includes('excursion')  || cat.includes('incursion')
-}
+//
+// Events count comes directly from the SAME GetAttendanceSummary response
+// already fetched for the Attendance column — Andrew's original code reads
+// this.ta ("total attended") on the pseudo-subject named "Events", with no
+// separate API call. This is the proven, verified source, replacing an
+// earlier invented Events.svc endpoint that never existed.
+//
+// Subtraction rule: each Detention or Suspension chronicle entry subtracts
+// 1 point from the final Extra Curricular score (after the events-based
+// score is calculated), floored at 1. Behaviour data (loadChronicleUsage)
+// is fetched once per CLASS and may resolve before or after each student's
+// individual Attendance call — extraCurricularData stores both pieces and
+// (re)renders whichever arrives second.
 
-function loadEvents(events, user) {
+var extraCurricularData = {} // userId -> { eventsAttended, severeEntries, eventsReady, severeReady }
+
+function loadExtraCurricular(classes, user) {
   var eventsAttended = 0
-  var eventNames = []
-
-  // Defensive: response shape may be events.d.data[] or events.d[]
-  var list = (events && events.d && events.d.data) ? events.d.data
-           : (events && events.d) ? events.d
-           : []
-
-  // Note: attendance is not filtered further here — the event list returned
-  // by GetEventsByUserId is already scoped to this student, so every entry
-  // represents an event they were associated with.
-  $.each(list, function() {
-    var name = this.name || this.eventName || ''
-    var cat  = this.categoryName || this.category || ''
-    if (isExcursionOrIncursion(name, cat)) {
-      eventsAttended++
-      eventNames.push(name)
-    }
+  $.each(classes.d, function() {
+    if (this.sn === "Events") eventsAttended = this.ta
   })
 
-  var score = scoreFromThresholds(eventsAttended, [[4, 4], [2, 3], [1, 2]])
+  if (!extraCurricularData[user]) extraCurricularData[user] = {}
+  extraCurricularData[user].eventsAttended = eventsAttended
+  extraCurricularData[user].eventsReady    = true
+
+  renderExtraCurricular(user)
+}
+
+// Called from loadChronicleUsage once Behaviour data is processed, so the
+// Detention/Suspension subtraction can be applied here too.
+function applySevereCountToExtraCurricular(user, severeEntries) {
+  if (!extraCurricularData[user]) extraCurricularData[user] = {}
+  extraCurricularData[user].severeEntries = severeEntries
+  extraCurricularData[user].severeReady   = true
+
+  renderExtraCurricular(user)
+}
+
+function renderExtraCurricular(user) {
+  var data = extraCurricularData[user]
+  if (!data || !data.eventsReady) return // wait for events data to arrive first
+
+  var eventsAttended = data.eventsAttended
+  var severeEntries  = data.severeReady ? data.severeEntries : 0 // render early at 0 if behaviour hasn't resolved yet
+
+  var baseScore = scoreFromThresholds(eventsAttended, [[4, 4], [2, 3], [1, 2]])
+  var score = Math.max(1, baseScore - severeEntries)
 
   var el = $('.dash' + user + ' .extra-curricular')
+  el.empty()
   el.append(scoreBadge(score))
-  var label = eventsAttended + ' excursion' + (eventsAttended !== 1 ? 's' : '') + '/incursion' + (eventsAttended !== 1 ? 's' : '')
-  el.append($('<span>').addClass('detail-text').attr('title', eventNames.join(', ') || 'None').text(label))
-  recordScore(user, 'extra-curricular', score)
+
+  var detail = eventsAttended + ' event' + (eventsAttended !== 1 ? 's' : '')
+  if (severeEntries > 0) {
+    detail += `, -${severeEntries} for detention/suspension`
+  }
+  el.append($('<span>').addClass('detail-text').text(detail))
+
+  // Only finalise the recorded score (used in the Total /20) once both
+  // pieces of data are in, so the total doesn't briefly show a wrong
+  // number before behaviour data finishes loading.
+  if (data.severeReady) {
+    recordScore(user, 'extra-curricular', score)
+  }
 }
 
 // ── Kick off ──────────────────────────────────────────────────────────────────
