@@ -818,14 +818,19 @@ $(document).ready(function() {
       //   1. Progress Report GPA for this subject ≥ 3.75
       //   2. EVERY task submissionStatus is exactly 3 (on time) — no late, no overdue, no pending
       //   3. EVERY task has a grade actually entered (results.length > 0)
-      //   4. The Overall Assessment/Performance/Grading:Achievement field is
+      //   4. EVERY individual task/KAT grade line on the report is
       //      "Working Above Expected Level" or "Working Well Above Expected Level"
+      //      — a single task at a lower grade disqualifies the student,
+      //      even if every other task is strong. (Previously this only
+      //      checked the one Overall Assessment summary field, letting
+      //      students through who had one weak task buried among strong
+      //      ones.)
       //
       // ENDEAVOUR — ALL of:
       //   1. Progress Report GPA for this subject ≥ 3.75
       //   2. EVERY task is submitted (status 3 on time, OR 4 late) — pending/overdue disqualifies
       //   3. EVERY task has a grade actually entered (results.length > 0)
-      //   4. The grade field is anything OTHER than "Not Assessed" or "Not Submitted"
+      //   4. NONE of the individual task grade lines are "Not Assessed" or "Not Submitted"
       //
       // Rule 3 is the one that matters most in practice: a student can look
       // perfect on paper (high GPA, good grade, all submitted) but still be
@@ -869,12 +874,33 @@ $(document).ready(function() {
             var studentName = this.name
             var studentId   = this.id
 
-            var gradeField = null // the Overall Assessment / Performance / Grading: Achievement text
+            // Collect EVERY task/grading field's displayValue — not just the
+            // single Overall Assessment summary. Excellence requires ALL of
+            // them to be "Working Above" or "Working Well Above"; Endeavour
+            // requires none of them to be "Not Assessed" or "Not Submitted".
+            // The summary field (Overall Assessment / Performance /
+            // Grading: Achievement) is still tracked separately since some
+            // reports only have that one field and no individual task lines.
+            var allGradeValues = []
+            var summaryGradeValue = null
+
             $.each(this.results, function() {
               if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
-                gradeField = this.displayValue
+                summaryGradeValue = this.displayValue
+              }
+              // Individual task/KAT grade lines: itemName holds the task
+              // name, displayValue holds the grade text for that task.
+              if (this.itemName && this.displayValue) {
+                allGradeValues.push(this.displayValue)
               }
             })
+
+            // If there were no individual task lines at all (some report
+            // layouts only show the summary), fall back to that one field
+            // so the check still has something to evaluate.
+            if (!allGradeValues.length && summaryGradeValue) {
+              allGradeValues.push(summaryGradeValue)
+            }
 
             var gp  = loadGPA(gpas, studentId)
             var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
@@ -883,18 +909,24 @@ $(document).ready(function() {
             var sub = submissionByStudent[studentId] || { allOnTime: false, allSubmitted: false, allGradesEntered: false }
 
             // ── Excellence check ──
-            // Requires every task graded — a single missing grade disqualifies
-            // the student from any award, regardless of how strong the rest
-            // of their results look.
-            var isExcellenceGrade = (gradeField == "Working Above Expected Level" || gradeField == "Working Well Above Expected Level")
-            if (sub.allOnTime && sub.allGradesEntered && isExcellenceGrade) {
+            // ALL task grades must be "Working Above" or "Working Well
+            // Above" — a single task at a lower grade disqualifies the
+            // student from Excellence, even if every other task is strong.
+            var allExcellenceGrade = allGradeValues.length > 0 && allGradeValues.every(function(g) {
+              return g === "Working Above Expected Level" || g === "Working Well Above Expected Level"
+            })
+            if (sub.allOnTime && sub.allGradesEntered && allExcellenceGrade) {
               excellenceNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
               return // already awarded Excellence, don't also check Endeavour
             }
 
             // ── Endeavour check ──
-            var isEndeavourGrade = (gradeField !== "Not Assessed" && gradeField !== "Not Submitted" && gradeField != null)
-            if (sub.allSubmitted && sub.allGradesEntered && isEndeavourGrade) {
+            // None of the task grades can be "Not Assessed" or "Not
+            // Submitted" — everything else is acceptable for Endeavour.
+            var noFailingGrade = allGradeValues.length > 0 && allGradeValues.every(function(g) {
+              return g !== "Not Assessed" && g !== "Not Submitted"
+            })
+            if (sub.allSubmitted && sub.allGradesEntered && noFailingGrade) {
               endeavourNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
             }
           })
