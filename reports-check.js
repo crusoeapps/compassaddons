@@ -377,12 +377,12 @@ $(document).ready(function() {
     #dash .rc-excend-names {
       flex: 1;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 4px 16px;
       color: #374151;
       line-height: 1.5;
     }
-    #dash .rc-excend-names span { white-space: nowrap; }
+    #dash .rc-excend-names span { white-space: normal; }
 
     #dash .rc-load-all {
       display: inline-flex; align-items: center; gap: 6px; margin: 10px 0;
@@ -812,27 +812,42 @@ $(document).ready(function() {
 
       actDiv.data('rerender', renderIssues)
 
-      // ── Excellence & Endeavour calculation (rebuilt to school rules) ──
+      // ── Excellence & Endeavour calculation (Andrew's original grade-
+      //    collection pattern, school's GPA/submission rules layered on top) ──
+      //
+      // Andrew's original loadReports loops through every result line on
+      // the Semester Report ONCE per student, collecting any line named
+      // "Overall Assessment", "Performance", or "Grading: Achievement"
+      // into a list (a report can have several of these — one per task/
+      // subject area). Separately, ANY result anywhere on the report
+      // (not just those three names) showing "Not Assessed" or "Not
+      // Submitted" disqualifies the student outright — this is Andrew's
+      // "en" flag.
       //
       // EXCELLENCE — ALL of:
       //   1. Progress Report GPA for this subject ≥ 3.75
-      //   2. EVERY task submissionStatus is exactly 3 (on time) — no late, no overdue, no pending
-      //   3. EVERY task has a grade actually entered (results.length > 0)
-      //   4. EVERY individual task/KAT grade line on the report for this
-      //      subject is "Working Above Expected Level" OR "Working Well
-      //      Above Expected Level" — a single task at a lower grade
-      //      disqualifies the student, even if every other task is strong.
+      //   2. No result anywhere on the report is "Not Assessed"/"Not Submitted"
+      //   3. EVERY task submissionStatus is exactly 3 (on time)
+      //   4. EVERY task has a grade actually entered (results.length > 0)
+      //   5. EVERY collected grade value is "Working Above Expected Level"
+      //      OR "Working Well Above Expected Level"
       //
       // ENDEAVOUR — ALL of:
       //   1. Progress Report GPA for this subject ≥ 3.75
-      //   2. EVERY task is submitted (status 3 on time, OR 4 late) — pending/overdue disqualifies
-      //   3. EVERY task has a grade actually entered (results.length > 0)
-      //   4. NONE of the individual task grade lines are "Not Assessed" or "Not Submitted"
+      //   2. No result anywhere on the report is "Not Assessed"/"Not Submitted"
+      //   3. EVERY task is submitted (status 3 on time, OR 4 late)
+      //   4. EVERY task has a grade actually entered (results.length > 0)
       //
-      // Rule 3 is the one that matters most in practice: a student can look
-      // perfect on paper (high GPA, good grade, all submitted) but still be
-      // missing a result on one individual task — that alone disqualifies
-      // them from any award until the missing grade is entered.
+      // Grades are stored per student (not just a true/false pass) so they
+      // can be printed next to GPA in the output — abbreviated the same
+      // way Andrew's original did (e.g. "Working Well Above Expected
+      // Level" -> "WWAEL"), with the full text available on hover.
+      //
+      // Rule 4 (allGradesEntered) is the one that matters most in
+      // practice: a student can look perfect on paper (high GPA, good
+      // grade, all submitted) but still be missing a result on one
+      // individual task — that alone disqualifies them from any award
+      // until the missing grade is entered.
       //
       // A student can only receive one award — Excellence is checked first;
       // if they don't qualify for Excellence, Endeavour is checked next.
@@ -871,72 +886,70 @@ $(document).ready(function() {
             var studentName = this.name
             var studentId   = this.id
 
-            // Collect EVERY task/grading field's displayValue — not just the
-            // single Overall Assessment summary. Excellence requires ALL of
-            // them to be "Working Above" or "Working Well Above"; Endeavour
-            // requires none of them to be "Not Assessed" or "Not Submitted".
-            // The summary field (Overall Assessment / Performance /
-            // Grading: Achievement) is still tracked separately since some
-            // reports only have that one field and no individual task lines.
-            var allGradeValues = []
-            var summaryGradeValue = null
+            // Andrew's original pattern: loop through EVERY result line on
+            // the report once. Any line named "Overall Assessment",
+            // "Performance", or "Grading: Achievement" is a grade we care
+            // about for Excellence/Endeavour — a report can have several
+            // of these (one per task/subject area), so we collect them all
+            // into gradeValues rather than only keeping the last one seen.
+            var gradeValues = []
+            var hasFailingGrade = false // true if ANY result anywhere is Not Assessed/Not Submitted
 
             $.each(this.results, function() {
               if (this.name == "Overall Assessment" || this.name == "Performance" || this.name == "Grading: Achievement") {
-                summaryGradeValue = this.displayValue
+                gradeValues.push(this.displayValue)
               }
-              // Individual task/KAT grade lines: itemName holds the task
-              // name, displayValue holds the grade text for that task.
-              if (this.itemName && this.displayValue) {
-                allGradeValues.push(this.displayValue)
+              if (this.displayValue == "Not Assessed" || this.displayValue == "Not Submitted") {
+                hasFailingGrade = true
               }
             })
-
-            // If there were no individual task lines at all (some report
-            // layouts only show the summary), fall back to that one field
-            // so the check still has something to evaluate.
-            if (!allGradeValues.length && summaryGradeValue) {
-              allGradeValues.push(summaryGradeValue)
-            }
 
             var gp  = loadGPA(gpas, studentId)
             var gpa = gp.length ? (gp.reduce((a, b) => a + b) / gp.length) : null
             if (gpa === null || gpa < 3.75) return // doesn't meet the GPA bar for either award
+            if (hasFailingGrade) return // Andrew's "en" flag — disqualifies from any award
 
             var sub = submissionByStudent[studentId] || { allOnTime: false, allSubmitted: false, allGradesEntered: false }
 
             // ── Excellence check ──
-            // ALL task grades for this subject must be "Working Above" or
-            // "Working Well Above" — a single task at a lower grade
-            // disqualifies the student from Excellence, even if every
-            // other task is strong.
-            var allExcellenceGrade = allGradeValues.length > 0 && allGradeValues.every(function(g) {
+            // EVERY collected grade value must be "Working Above" or
+            // "Working Well Above" — a single weaker grade disqualifies
+            // the student from Excellence, even if every other one is strong.
+            var allExcellenceGrade = gradeValues.length > 0 && gradeValues.every(function(g) {
               return g === "Working Above Expected Level" || g === "Working Well Above Expected Level"
             })
             if (sub.allOnTime && sub.allGradesEntered && allExcellenceGrade) {
-              excellenceNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
+              excellenceNames.push({ name: studentName, gpa: gpa, grades: gradeValues })
               return // already awarded Excellence, don't also check Endeavour
             }
 
             // ── Endeavour check ──
-            // None of the task grades can be "Not Assessed" or "Not
-            // Submitted" — everything else is acceptable for Endeavour.
-            var noFailingGrade = allGradeValues.length > 0 && allGradeValues.every(function(g) {
-              return g !== "Not Assessed" && g !== "Not Submitted"
-            })
-            if (sub.allSubmitted && sub.allGradesEntered && noFailingGrade) {
-              endeavourNames.push(`${studentName} (GPA ${gpa.toFixed(2)})`)
+            // Same GPA/submission bar as Excellence, but no grade-quality
+            // requirement beyond having no failing grade (already checked
+            // above via hasFailingGrade).
+            if (sub.allSubmitted && sub.allGradesEntered && gradeValues.length > 0) {
+              endeavourNames.push({ name: studentName, gpa: gpa, grades: gradeValues })
             }
           })
 
           excendCounts.text(`${excellenceNames.length} Excellence, ${endeavourNames.length} Endeavour`)
 
-          function renderAwardRow(label, sevClass, names) {
+          // Abbreviate grade text the same way Andrew's original did —
+          // e.g. "Working Well Above Expected Level" -> "WWAEL" — so the
+          // display stays compact even with several grades per student.
+          function abbreviate(text) {
+            var matches = text.match(/\b([A-Z])/g)
+            return matches ? matches.join('') : text
+          }
+
+          function renderAwardRow(label, sevClass, students) {
             var row  = $('<div>').addClass('rc-excend-row').appendTo(excendBody)
             $('<span>').addClass(`rc-excend-tag ${sevClass}`).text(label).appendTo(row)
             var grid = $('<div>').addClass('rc-excend-names').appendTo(row)
-            names.forEach(function(name) {
-              $('<span>').attr('title', name).text(name).appendTo(grid)
+            students.forEach(function(s) {
+              var gradesAbbr = s.grades.map(abbreviate).join('/')
+              var fullText = `${s.name} (GPA ${s.gpa.toFixed(2)}, ${s.grades.join(', ')})`
+              $('<span>').attr('title', fullText).text(`${s.name} — GPA ${s.gpa.toFixed(2)} — ${gradesAbbr}`).appendTo(grid)
             })
           }
 
