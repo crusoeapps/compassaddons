@@ -1,3 +1,4 @@
+// Current version at 21 June 2026
 $(document).ready(function() {
 
   if (!window.single) {
@@ -261,36 +262,6 @@ $(document).ready(function() {
     #dash .rc-activity-body { display: none; padding: 0 14px 12px 26px; }
     #dash .rc-activity.open .rc-activity-body { display: block; }
 
-    #dash .rc-issue-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-    #dash .rc-issue-group { border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }
-    #dash .rc-issue-group-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 7px 12px; cursor: pointer; user-select: none; font-size: 12px; font-weight: 600;
-    }
-    #dash .rc-issue-group.group-setup .rc-issue-group-header {
-      background: #eff6ff; border-bottom: 1px solid #bfdbfe; color: #1d40ae;
-    }
-    #dash .rc-issue-group.group-results .rc-issue-group-header {
-      background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #9a3412;
-    }
-    #dash .rc-group-badge { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
-    #dash .group-setup .rc-group-badge   { background: #dbeafe; color: #1d40ae; }
-    #dash .group-results .rc-group-badge { background: #fed7aa; color: #9a3412; }
-    #dash .rc-issue-group-body { display: none; }
-    #dash .rc-issue-group.open .rc-issue-group-body { display: block; }
-    #dash .rc-issue-item {
-      display: flex; align-items: flex-start; gap: 8px; padding: 6px 12px;
-      border-bottom: 1px solid #f9fafb; font-size: 12px; color: #374151; line-height: 1.5;
-    }
-    #dash .rc-issue-item:last-child { border-bottom: none; }
-    #dash .rc-issue-sev {
-      font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
-      flex-shrink: 0; margin-top: 2px; text-transform: uppercase;
-    }
-    #dash .rc-issue-sev.error   { background: #fee2e2; color: #991b1b; }
-    #dash .rc-issue-sev.warning { background: #fef3c7; color: #92400e; }
-    #dash .rc-issue-sev.info    { background: #f3f4f6; color: #6b7280; }
-
     /* ── Option C: two-column summary groups ── */
     #dash .rc-summary-cols {
       display: grid;
@@ -429,80 +400,6 @@ $(document).ready(function() {
       #dash .rc-summary-detail { display: block !important; }
     }
 
-    /* ── Two-column grouped issue layout (Option C) ── */
-    #dash .rc-issue-cols {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    #dash .rc-issue-col {
-      border: 1px solid #e2e5ea;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    #dash .rc-issue-col-hdr {
-      padding: 7px 12px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    #dash .rc-issue-col.col-lt .rc-issue-col-hdr {
-      background: #eff6ff;
-      border-bottom: 1px solid #bfdbfe;
-      color: #1d40ae;
-    }
-    #dash .rc-issue-col.col-sem .rc-issue-col-hdr {
-      background: #fff7ed;
-      border-bottom: 1px solid #fed7aa;
-      color: #9a3412;
-    }
-    #dash .rc-summary-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-bottom: 1px solid #f9fafb;
-      font-size: 11.5px;
-      color: #374151;
-      cursor: pointer;
-    }
-    #dash .rc-summary-row:hover { background: #f9fafb; }
-    #dash .rc-summary-row:last-child { border-bottom: none; }
-    #dash .rc-summary-label { flex: 1; }
-    #dash .rc-summary-chevron {
-      font-size: 9px;
-      color: #9ca3af;
-      transition: transform 0.15s;
-      flex-shrink: 0;
-    }
-    #dash .rc-summary-row.open .rc-summary-chevron { transform: rotate(90deg); }
-    #dash .rc-count-badge {
-      font-size: 10.5px;
-      font-weight: 700;
-      padding: 1px 7px;
-      border-radius: 20px;
-      flex-shrink: 0;
-    }
-    #dash .rc-count-badge.error   { background: #fee2e2; color: #991b1b; }
-    #dash .rc-count-badge.warning { background: #fef3c7; color: #92400e; }
-    #dash .rc-summary-detail {
-      display: none;
-      padding: 0 12px 8px 28px;
-      background: #fafbfc;
-    }
-    #dash .rc-summary-row.open + .rc-summary-detail { display: block; }
-    #dash .rc-detail-item {
-      font-size: 11px;
-      color: #6b7280;
-      padding: 3px 0;
-      line-height: 1.5;
-    }
-    #dash .rc-issue-col-empty {
-      padding: 12px;
-      font-size: 11.5px;
-      color: #9ca3af;
-      text-align: center;
-    }
   </style></div>`).appendTo('body')
 
   // ── Stat counters ─────────────────────────────────────────────────────────
@@ -769,11 +666,18 @@ $(document).ready(function() {
   function emailUser(user, cycleId) {
     var subject = 'Reports Check — please action the following issues'
     var lines = []
-    $(`#rc-cycle-${cycleId} .rc-issue-item`).each(function() {
-      lines.push($(this).find('div:last').text().trim())
+    // FIX: .rc-issue-item no longer exists — the issue list was rebuilt
+    // into the grouped Option C summary cards (.rc-summary-row +
+    // .rc-summary-detail) but this function was never updated to match,
+    // so Email always reported "no outstanding issues" regardless of the
+    // real state. Read from the current structure instead.
+    $(`#rc-cycle-${cycleId} .rc-summary-row`).each(function() {
+      var label  = $(this).find('.rc-summary-row-label').text().trim()
+      var detail = $(this).next('.rc-summary-detail').text().trim()
+      lines.push(label + (detail ? ' — ' + detail : ''))
     })
     if (lines.length) {
-      window.location.href = `mailto:${user.d.userEmail}?subject=${encodeURIComponent(subject)}&body=${lines.join('%0a')}`
+      window.location.href = `mailto:${user.d.userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`
     } else {
       alert((user.d.userDisplayName || 'This staff member') + ' has no outstanding issues.')
     }
