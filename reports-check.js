@@ -627,35 +627,46 @@ $(document).ready(function() {
   var cycleContainer = $('<div>').attr('id', 'rc-cycles').appendTo(body)
 
   // The single Progress Report cycle ID used for Excellence & Endeavour GPA.
-  // Andrew's original tried to match Progress Report cycles to Semester
-  // Report cycles by exact start date, which silently fails if the dates
-  // don't line up exactly (very likely, since progress cycles usually run
-  // mid-term). Class Dashboard avoids this entirely by not needing a cycle
-  // ID — it calls GetOverallGraphData which returns the student's full GPA
-  // history with no cycle filter. For Reports Check we still need a
-  // subject-specific GPA (GetResultsByCycleAndActivity requires a cycle id),
-  // so instead of date-matching we just take the most recent Progress
-  // Report cycle available — the same "pick the current one" approach
-  // Class Dashboard uses via isRelevant for Learning Tasks.
+  //
+  // Why this exists: GetResultsByCycleAndActivity (the subject-specific GPA
+  // endpoint) requires a Progress Report cycle id. Progress Report cycles
+  // run on their own schedule, separate from Semester Report cycles, so
+  // there's no reliable way to match them by date. Instead we just take
+  // whichever Progress Report cycle started most recently — the same
+  // "use the current one" approach Class Dashboard already uses for
+  // Learning Tasks via its isRelevant flag.
+  //
+  // IMPORTANT: this must be loaded BEFORE any class tries to use it.
+  // Earlier versions fetched this in the background while classes were
+  // already loading, which was a race condition — fast-loading classes
+  // would ask for the GPA before this had arrived, and silently get
+  // "No Progress Report cycle found". Fixing the order, not just the
+  // lookup, is what actually fixes the bug.
   var currentProgressCycleId = null
 
-  getCycles().done(loadCycles)
-  getProgress().done(pickMostRecentProgressCycle)
-  getOpenProgress().done(pickMostRecentProgressCycle)
-
-  function pickMostRecentProgressCycle(cycles) {
-    if (!cycles.d || !cycles.d.length) return
-    var sorted = cycles.d.slice().sort(function(a, b) {
-      return new Date(b.start) - new Date(a.start)
-    })
-    var mostRecent = sorted[0]
-    // Only overwrite if this batch's most recent cycle is newer than
-    // whatever we already have (since getProgress and getOpenProgress
-    // both call this function and either could return first)
-    if (!currentProgressCycleId || new Date(mostRecent.start) > currentProgressCycleId.start) {
-      currentProgressCycleId = { id: mostRecent.id, start: new Date(mostRecent.start) }
-    }
+  function pickMostRecentCycle(cycles) {
+    if (!cycles.d || !cycles.d.length) return null
+    return cycles.d.reduce(function(latest, c) {
+      return (!latest || new Date(c.start) > new Date(latest.start)) ? c : latest
+    }, null)
   }
+
+  // Load everything Reports Check needs up front, in the correct order:
+  // 1. Semester Report cycles (populates the dropdown)
+  // 2. Progress Report cycles (published + open, merged, pick most recent)
+  // Only once BOTH are ready do we let the dropdown trigger loading classes.
+  $.when(getCycles(), getProgress(), getOpenProgress()).done(function(cycles, published, open) {
+    loadCycles(cycles[0])
+
+    var publishedCycle = pickMostRecentCycle(published[0])
+    var openCycle       = pickMostRecentCycle(open[0])
+    var best = [publishedCycle, openCycle].filter(Boolean).sort(function(a, b) {
+      return new Date(b.start) - new Date(a.start)
+    })[0]
+    currentProgressCycleId = best ? best.id : null
+
+    selectCycle.change() // now safe to start loading classes
+  })
 
   // ── API: Cycles ───────────────────────────────────────────────────────────
   function getCycles() {
@@ -669,11 +680,12 @@ $(document).ready(function() {
       var opt = $('<option>').val(n.id).attr('data-start', n.start).text(n.name + ' ' + n.year).appendTo(selectCycle)
       if (i === 0) opt.attr('selected', 'selected')
     })
-    selectCycle.change()
+    // selectCycle.change() is now called once, after Progress Report
+    // cycles have also loaded — see the $.when() block above.
   }
 
   // Fetches both published and currently-open Progress Report cycles.
-  // pickMostRecentProgressCycle (above) decides which one to actually use.
+  // pickMostRecentCycle (above) decides which one to actually use.
   function getProgress() {
     return $.ajax("/Services/Gpa.svc/GetPublishedCycles", {
       data: JSON.stringify({ page: 1, start: 0, limit: 25 }),
@@ -908,7 +920,7 @@ $(document).ready(function() {
           excendCounts.text('No Progress Report cycle found')
           return
         }
-        var GPAcycleId = currentProgressCycleId.id
+        var GPAcycleId = currentProgressCycleId
 
         // Build userId -> { allOnTime, allSubmitted } from Learning Task data
         var submissionByStudent = {}
