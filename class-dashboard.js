@@ -359,9 +359,16 @@ function loadStudents(students) {
   // Behaviour: ONE call for the whole class (not per student) — matches
   // Andrew's original design. GetCategoryUsageCount returns every
   // student's chronicle counts for this class in a single response.
+  //
+  // BUG FIX: both getChronicleUsage ($.ajax) and getChronicleCategories
+  // ($.get) resolve with (data, textStatus, jqXHR) — three arguments each.
+  // $.when() therefore wraps EACH of them as an array, not just the first
+  // one. Using "categories" directly (instead of "categories[0]") meant
+  // categories.d was always undefined, so every category name lookup
+  // silently failed and nothing ever rendered — no error, just blank.
   $.when(getChronicleUsage(activityId), getChronicleCategories())
     .done(function(usage, categories) {
-      loadChronicleUsage(usage[0], categories)
+      loadChronicleUsage(usage[0], categories[0])
     })
 }
 
