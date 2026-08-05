@@ -17,15 +17,19 @@
       --text:     #111827;
       --muted:    #6b7280;
       --accent:   #0057d9;
-      --accent2:  #1a6bff;
       --green:    #16a34a;
       --amber:    #d97706;
       --purple:   #7c3aed;
       --radius:   12px;
+
+      /* Bookmarklet button colours — overwritten by JS on load */
+      --bm-from:  #fbbf24;
+      --bm-to:    #f59e0b;
+      --bm-text:  #422006;
+      --bm-shadow: rgba(245,158,11,0.4);
     }
 
     html { scroll-behavior: smooth; }
-
     body {
       font-family: 'Inter', system-ui, sans-serif;
       background: var(--bg);
@@ -59,366 +63,175 @@
     }
     .topbar-sep { width: 1px; height: 18px; background: var(--border); }
     .topbar-label { font-size: 13px; font-weight: 500; color: var(--muted); }
-    .topbar-badge {
+
+    /* ── Last updated — auto-filled by JS ── */
+    .topbar-updated {
       margin-left: auto;
-      font-size: 11.5px;
-      font-weight: 600;
-      background: #e8f0fe;
-      color: var(--accent);
-      padding: 3px 10px;
-      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
     }
+    .topbar-updated strong { font-weight: 600; color: var(--text); }
 
     /* ── Page ── */
-    .page {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 3rem 1.5rem 5rem;
-    }
+    .page { max-width: 900px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
 
     /* ── Hero ── */
-    .hero {
-      margin-bottom: 2.5rem;
-    }
+    .hero { margin-bottom: 2.5rem; }
     .hero-eyebrow {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 10px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
     }
-    .hero h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--text);
-      line-height: 1.2;
-      margin-bottom: 12px;
-    }
-    .hero p {
-      font-size: 14px;
-      color: var(--muted);
-      max-width: 46ch;
-      line-height: 1.7;
-    }
+    .hero h1 { font-size: 28px; font-weight: 700; line-height: 1.2; margin-bottom: 12px; }
+    .hero p { font-size: 14px; color: var(--muted); max-width: 46ch; line-height: 1.7; }
 
     /* ── How to use ── */
     .howto {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      background: #eef4ff;
-      border: 1px solid #c5d8fb;
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      margin-bottom: 2.5rem;
+      display: flex; align-items: flex-start; gap: 14px;
+      background: #eef4ff; border: 1px solid #c5d8fb;
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 2.5rem;
     }
     .howto-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
     .howto-body { font-size: 13px; color: #1e3a8a; line-height: 1.65; }
     .howto-body strong { font-weight: 600; }
     .howto-body kbd {
-      font-family: inherit;
-      font-size: 11px;
-      background: white;
-      border: 1px solid #c5d8fb;
-      border-radius: 4px;
-      padding: 1px 5px;
-      color: #1e3a8a;
+      font-family: inherit; font-size: 11px; background: white;
+      border: 1px solid #c5d8fb; border-radius: 4px; padding: 1px 5px; color: #1e3a8a;
     }
 
     /* ── Section label ── */
     .section-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
     }
-    .section-label::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
     /* ── Tool grid ── */
     .tool-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-      margin-bottom: 2.5rem;
+      gap: 14px; margin-bottom: 2.5rem;
     }
 
     /* ── Tool card ── */
     .tool-card {
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      background: white; border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      display: flex; flex-direction: column;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       transition: box-shadow 0.18s ease, transform 0.18s ease;
     }
-    .tool-card:hover {
-      box-shadow: 0 6px 20px rgba(0,0,0,0.09);
-      transform: translateY(-2px);
-    }
-    .tool-card-stripe {
-      height: 4px;
-      flex-shrink: 0;
-    }
+    .tool-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.09); transform: translateY(-2px); }
+    .tool-card-stripe { height: 4px; flex-shrink: 0; }
     .tool-card.stable  .tool-card-stripe { background: var(--green); }
     .tool-card.testing .tool-card-stripe { background: var(--amber); }
     .tool-card.exp     .tool-card-stripe { background: var(--purple); }
 
-    .tool-card-body {
-      padding: 18px 18px 14px;
-      flex: 1;
-    }
-    .tool-card-name {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-    .tool-card-desc {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.55;
-      margin-bottom: 12px;
-    }
+    .tool-card-body { padding: 18px 18px 14px; flex: 1; }
+    .tool-card-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .tool-card-desc { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
     .tool-card-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 11px;
-      font-weight: 600;
-      border-radius: 20px;
-      padding: 3px 9px;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600; border-radius: 20px; padding: 3px 9px;
     }
     .tool-card-tag.stable  { background: #dcfce7; color: #15803d; }
     .tool-card-tag.testing { background: #fef3c7; color: #92400e; }
     .tool-card-tag.exp     { background: #ede9fe; color: #5b21b6; }
     .tool-card-tag::before { content: '●'; font-size: 7px; }
 
+    /* ── Updated badge — date text auto-filled by JS ── */
+    .updated-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600;
+      color: #92400e; background: #fef3c7;
+      border: 1px solid #fde68a; border-radius: 20px;
+      padding: 3px 9px; margin-left: 6px;
+    }
+    .updated-badge::before { content: '🕒'; font-size: 10px; }
+
     /* ── Bookmarklet drag zone ── */
     .tool-card-drag {
-      padding: 12px 18px 14px;
-      background: #f8fafc;
+      padding: 12px 18px 14px; background: #f8fafc;
       border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      display: flex; align-items: center; gap: 10px;
     }
-    .drag-hint-text {
-      font-size: 11px;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-    .drag-hint-text strong {
-      display: block;
-      color: #374151;
-      font-weight: 600;
-      font-size: 11.5px;
-      margin-bottom: 1px;
-    }
+    .drag-hint-text { font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .drag-hint-text strong { display: block; color: #374151; font-weight: 600; font-size: 11.5px; margin-bottom: 1px; }
 
-    /* ── The bookmarklet button — the star of the show ── */
+    /* ── Bookmarklet button — colour set by JS via CSS vars ── */
     .bookmarklet {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      padding: 9px 16px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      color: #422006;
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-      border: none;
-      text-decoration: none;
-      cursor: grab;
-      user-select: none;
-      white-space: nowrap;
-      flex-shrink: 0;
-      box-shadow: 0 2px 8px rgba(245,158,11,0.4), 0 1px 2px rgba(245,158,11,0.25);
-      transition: box-shadow 0.15s, transform 0.15s, background 0.15s;
-      position: relative;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 9px 16px; border-radius: 8px;
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--bm-text);
+      background: linear-gradient(135deg, var(--bm-from) 0%, var(--bm-to) 100%);
+      border: none; text-decoration: none;
+      cursor: grab; user-select: none; white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 2px 8px var(--bm-shadow), 0 1px 2px var(--bm-shadow);
+      transition: box-shadow 0.15s, transform 0.15s;
     }
     .bookmarklet:hover {
-      box-shadow: 0 4px 16px rgba(245,158,11,0.5), 0 2px 4px rgba(245,158,11,0.3);
+      box-shadow: 0 4px 16px var(--bm-shadow), 0 2px 4px var(--bm-shadow);
       transform: translateY(-1px);
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      filter: brightness(0.93);
     }
     .bookmarklet:active { cursor: grabbing; transform: translateY(0); }
-    .bookmarklet-arrow {
-      font-size: 16px;
-      animation: bounce 1.6s ease-in-out infinite;
-    }
+    .bookmarklet-arrow { font-size: 16px; animation: bounce 1.6s ease-in-out infinite; }
     @keyframes bounce {
       0%, 100% { transform: translateY(0); }
       50%       { transform: translateY(-3px); }
     }
 
-    /* Drag instruction tooltip that appears on hover across the page */
     .drag-tooltip {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      background: var(--accent);
-      color: white;
-      text-align: center;
-      font-size: 13px;
-      font-weight: 500;
-      padding: 9px 1rem;
-      z-index: 200;
-      pointer-events: none;
-      letter-spacing: 0.01em;
+      display: none; position: fixed; top: 0; left: 0; right: 0;
+      background: var(--accent); color: white; text-align: center;
+      font-size: 13px; font-weight: 500; padding: 9px 1rem;
+      z-index: 200; pointer-events: none;
       box-shadow: 0 2px 8px rgba(0,87,217,0.3);
     }
     .drag-tooltip.show { display: block; }
 
     /* ── Legend ── */
-    .legend {
-      display: flex;
-      gap: 18px;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-    }
-    .legend-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
+    .legend { display: flex; gap: 18px; margin-bottom: 2rem; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
     .legend-dot.stable  { background: var(--green); }
     .legend-dot.testing { background: var(--amber); }
     .legend-dot.exp     { background: var(--purple); }
 
     /* ── Coming soon ── */
     .coming-soon {
-      background: white;
-      border: 1px dashed var(--border);
-      border-radius: var(--radius);
-      padding: 18px 20px;
-      margin-bottom: 2.5rem;
+      background: white; border: 1px dashed var(--border);
+      border-radius: var(--radius); padding: 18px 20px; margin-bottom: 2.5rem;
     }
-    .coming-soon h3 {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    .coming-soon-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
+    .coming-soon h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
+    .coming-soon-pills { display: flex; flex-wrap: wrap; gap: 6px; }
     .coming-soon-pill {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 3px 10px;
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 20px; padding: 3px 10px;
     }
 
     /* ── Sandbox ── */
     .sandbox-section { margin-top: 1rem; }
-    .sandbox-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
+    .sandbox-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .sandbox-header h2 { font-size: 15px; font-weight: 600; }
-    .sandbox-dev-badge {
-      font-size: 11px;
-      font-weight: 600;
-      background: #ede9fe;
-      color: #5b21b6;
-      padding: 2px 8px;
-      border-radius: 20px;
-    }
+    .sandbox-dev-badge { font-size: 11px; font-weight: 600; background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 20px; }
     .sandbox-desc { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
-    .sandbox-wrap {
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .sandbox-chrome {
-      background: #f3f4f6;
-      border-bottom: 1px solid var(--border);
-      padding: 8px 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .sandbox-wrap { background: white; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .sandbox-chrome { background: #f3f4f6; border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
     .chrome-dot { width: 10px; height: 10px; border-radius: 50%; }
     .chrome-dot:nth-child(1) { background: #ff5f57; }
     .chrome-dot:nth-child(2) { background: #febc2e; }
     .chrome-dot:nth-child(3) { background: #28c840; }
-    .chrome-url {
-      flex: 1;
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 3px 10px;
-      font-size: 11.5px;
-      color: var(--muted);
-      margin: 0 6px;
-    }
-    .sandbox-note {
-      font-size: 12px;
-      color: #92400e;
-      padding: 8px 14px;
-      background: #fffbeb;
-      border-bottom: 1px solid #fde68a;
-    }
-    .sandbox-input-area {
-      padding: 12px;
-      background: #f8f9fa;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+    .chrome-url { flex: 1; background: white; border: 1px solid var(--border); border-radius: 5px; padding: 3px 10px; font-size: 11.5px; color: var(--muted); margin: 0 6px; }
+    .sandbox-note { font-size: 12px; color: #92400e; padding: 8px 14px; background: #fffbeb; border-bottom: 1px solid #fde68a; }
+    .sandbox-input-area { padding: 12px; background: #f8f9fa; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
     .sandbox-input-area label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
-    .sandbox-input-area textarea {
-      width: 100%;
-      font-family: monospace;
-      font-size: 12px;
-      padding: 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      resize: vertical;
-      color: var(--text);
-      background: white;
-    }
+    .sandbox-input-area textarea { width: 100%; font-family: monospace; font-size: 12px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; resize: vertical; color: var(--text); background: white; }
     .sandbox-btns { display: flex; gap: 6px; }
-    .sandbox-btn {
-      font-size: 12px;
-      font-weight: 500;
-      padding: 5px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      border: 1px solid var(--border);
-    }
+    .sandbox-btn { font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); }
     .sandbox-btn.run { background: var(--accent); color: white; border-color: var(--accent); }
     .sandbox-btn.run:hover { background: #004ec7; }
     .sandbox-btn.clear { background: white; color: var(--muted); }
@@ -427,15 +240,9 @@
 
     /* ── Footer ── */
     footer {
-      margin-top: 3rem;
-      padding-top: 20px;
-      border-top: 1px solid var(--border);
-      font-size: 12px;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 6px;
+      margin-top: 3rem; padding-top: 20px; border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
     }
     footer a { color: var(--muted); text-decoration: underline; }
 
@@ -444,6 +251,7 @@
       .tool-grid { grid-template-columns: 1fr; }
       .howto { flex-direction: column; }
       .hero h1 { font-size: 22px; }
+      .topbar-updated { display: none; }
     }
   </style>
 </head>
@@ -465,7 +273,8 @@
   </a>
   <div class="topbar-sep"></div>
   <span class="topbar-label">Power Tools</span>
-  <div class="topbar-badge">Current version at 21 June 2026</div>
+  <!-- ↓ Auto-filled by JS from document.lastModified -->
+  <span class="topbar-updated">Last updated on <strong id="last-updated-text"></strong></span>
 </div>
 
 <div class="page">
@@ -481,7 +290,7 @@
   <div class="howto">
     <div class="howto-icon">📌</div>
     <div class="howto-body">
-      <strong>How to use:</strong> Drag a blue button below to your Bookmarks Bar. Then open a class page in Compass and click the bookmark.
+      <strong>How to use:</strong> Drag a coloured button below to your Bookmarks Bar. Then open a class page in Compass and click the bookmark.
       If your bar isn't visible: <kbd>Menu</kbd> → <kbd>Bookmarks</kbd> → <kbd>Show Bookmarks Bar</kbd>.
     </div>
   </div>
@@ -503,10 +312,15 @@
         <div class="tool-card-name">Advisory Rubric Calculator</div>
         <div class="tool-card-desc">Student-by-student summary showing KATs, GPA, attendance, behaviour and extra-curricular scores — colour coded 1–4 with a total rating.</div>
         <div class="tool-card-tag stable">Stable</div>
+        <!-- ↓ Date auto-filled by JS -->
+        <span class="updated-badge" id="arc-badge"></span>
       </div>
       <div class="tool-card-drag">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=11';})();" class="bookmarklet">
-          <span class="bookmarklet-arrow">⇧</span> Advisory Rubric Calculator 3.0
+        <!-- ↓ Button label auto-filled by JS; colour set via CSS vars -->
+        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=7';})();"
+           class="bookmarklet" id="arc-btn">
+          <span class="bookmarklet-arrow">⇧</span>
+          <span id="arc-btn-label">Advisory Rubric Calculator</span>
         </a>
         <div class="drag-hint-text">
           <strong>Drag to bookmarks</strong>
@@ -521,10 +335,14 @@
         <div class="tool-card-name">Reports Check 3.0</div>
         <div class="tool-card-desc">Checks reports for missing elements, task naming, grading setup, and Excellence & Endeavour recommendations. Grouped by setup issues and missing results.</div>
         <div class="tool-card-tag stable">Stable</div>
+        <!-- ↓ Date auto-filled by JS -->
+        <span class="updated-badge" id="rc-badge"></span>
       </div>
       <div class="tool-card-drag">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/reports-check.js?v=36';})();" class="bookmarklet">
-          <span class="bookmarklet-arrow">⇧</span> Reports Check 3.0
+        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/reports-check.js?v=20';})();"
+           class="bookmarklet" id="rc-btn">
+          <span class="bookmarklet-arrow">⇧</span>
+          <span id="rc-btn-label">Reports Check 3.0</span>
         </a>
         <div class="drag-hint-text">
           <strong>Drag to bookmarks</strong>
@@ -563,9 +381,7 @@
     <p class="sandbox-desc">Test a script without touching your live Compass session. Paste JavaScript and run it in the isolated preview below. API calls will fail here — use this for UI layout and logic testing only.</p>
     <div class="sandbox-wrap">
       <div class="sandbox-chrome">
-        <div class="chrome-dot"></div>
-        <div class="chrome-dot"></div>
-        <div class="chrome-dot"></div>
+        <div class="chrome-dot"></div><div class="chrome-dot"></div><div class="chrome-dot"></div>
         <div class="chrome-url"><span style="color:var(--accent)">sandbox</span> — isolated preview</div>
       </div>
       <div class="sandbox-note">⚠️ Sandbox is isolated from Compass — API calls will fail. UI and logic testing only.</div>
@@ -590,44 +406,110 @@
 </div>
 
 <script>
-  // Drag tooltip
-  var tooltip = document.getElementById('dragTooltip')
-  document.querySelectorAll('.bookmarklet').forEach(function(btn) {
-    btn.addEventListener('mouseenter', function() { tooltip.classList.add('show') })
-    btn.addEventListener('mouseleave', function() { tooltip.classList.remove('show') })
-    btn.addEventListener('click', function(e) {
-      e.preventDefault()
-      tooltip.classList.remove('show')
-      alert('Drag this button to your Bookmarks Bar, then click it when you\'re on a Compass class page.')
-    })
-  })
+// ── Auto-date & button colour ─────────────────────────────────────────────────
+// document.lastModified reflects when this HTML file was last saved to the
+// server. Every time you push a new version to GitHub Pages the date here
+// updates automatically — no manual editing required.
 
-  // Sandbox
-  function runSandbox() {
-    var code = document.getElementById('sandboxInput').value.trim()
-    if (!code) return
-    var html = [
-      '<html><head>',
-      '<style>body{font-family:sans-serif;font-size:13px;padding:1rem;color:#111827;}',
-      'pre{background:#f3f4f6;padding:.75rem;border-radius:.4rem;font-size:12px;white-space:pre-wrap;word-break:break-all;margin-bottom:.5rem;}',
-      '.err{background:#fef2f2;color:#dc2626;}</style></head><body>',
-      '<div id="out"></div>',
-      '<scr'+'ipt>',
-      'var _l=console.log.bind(console);',
-      'console.log=function(){var e=document.createElement("pre");',
-      'e.textContent=Array.from(arguments).map(function(a){return typeof a==="object"?JSON.stringify(a,null,2):String(a)}).join(" ");',
-      'document.getElementById("out").appendChild(e);_l.apply(console,arguments)};',
-      'try{',code,
-      '}catch(e){var x=document.createElement("pre");x.className="err";',
-      'x.textContent="❌ "+e.message;document.getElementById("out").appendChild(x);}',
-      '</'+'script></body></html>'
-    ].join('')
-    document.getElementById('sandbox').srcdoc = html
-  }
-  function clearSandbox() {
-    document.getElementById('sandboxInput').value = ''
-    document.getElementById('sandbox').srcdoc = "<html><body style='font-family:sans-serif;padding:1rem;color:#9ca3af;font-size:13px;'>Cleared.</body></html>"
-  }
+(function () {
+
+  // ── 1. Format the file's last-modified date ─────────────────────────────
+  var raw = new Date(document.lastModified)
+  var months = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December']
+  var day   = raw.getDate()
+  var month = months[raw.getMonth()]
+  var year  = raw.getFullYear()
+  var short = day + ' ' + month.slice(0, 3)          // e.g. "19 Jun"
+  var long  = day + ' ' + month + ' ' + year         // e.g. "19 June 2026"
+
+  // ── 2. Topbar "Last updated on" ──────────────────────────────────────────
+  var updatedEl = document.getElementById('last-updated-text')
+  if (updatedEl) updatedEl.textContent = long
+
+  // ── 3. Updated badges on each tool card ──────────────────────────────────
+  var arcBadge = document.getElementById('arc-badge')
+  var rcBadge  = document.getElementById('rc-badge')
+  if (arcBadge) arcBadge.textContent = short
+  if (rcBadge)  rcBadge.textContent  = short
+
+  // ── 4. Button labels ─────────────────────────────────────────────────────
+  var arcLabel = document.getElementById('arc-btn-label')
+  if (arcLabel) arcLabel.textContent = 'Advisory Rubric Calculator ' + short
+
+  // Reports Check keeps its version number in the label, date appended
+  var rcLabel = document.getElementById('rc-btn-label')
+  if (rcLabel) rcLabel.textContent = 'Reports Check ' + short
+
+  // ── 5. Random-but-pleasing button colour ─────────────────────────────────
+  // Palette of carefully chosen colour pairs [from, to, text, shadow].
+  // A new pair is chosen by seeding from the file's modification date so
+  // the colour is stable for the life of that deploy but changes on the
+  // next push. "Random per deploy, stable per session."
+  var PALETTE = [
+    // from        to          text       shadow
+    ['#fbbf24', '#f59e0b', '#422006', 'rgba(245,158,11,0.45)'],   // amber (original)
+    ['#34d399', '#10b981', '#064e3b', 'rgba(16,185,129,0.45)'],   // emerald
+    ['#60a5fa', '#3b82f6', '#1e3a8a', 'rgba(59,130,246,0.45)'],   // blue
+    ['#f472b6', '#ec4899', '#500724', 'rgba(236,72,153,0.45)'],   // pink
+    ['#a78bfa', '#8b5cf6', '#2e1065', 'rgba(139,92,246,0.45)'],   // violet
+    ['#fb923c', '#f97316', '#431407', 'rgba(249,115,22,0.45)'],   // orange
+    ['#4ade80', '#22c55e', '#14532d', 'rgba(34,197,94,0.45)'],    // green
+    ['#38bdf8', '#0ea5e9', '#0c4a6e', 'rgba(14,165,233,0.45)'],   // sky
+    ['#f87171', '#ef4444', '#450a0a', 'rgba(239,68,68,0.45)'],    // red
+    ['#fcd34d', '#fbbf24', '#451a03', 'rgba(251,191,36,0.45)'],   // yellow
+  ]
+
+  // Seed from year+month+day so it changes each new day a deploy lands
+  var seed  = raw.getFullYear() * 10000 + (raw.getMonth() + 1) * 100 + raw.getDate()
+  var entry = PALETTE[seed % PALETTE.length]
+
+  var root = document.documentElement
+  root.style.setProperty('--bm-from',   entry[0])
+  root.style.setProperty('--bm-to',     entry[1])
+  root.style.setProperty('--bm-text',   entry[2])
+  root.style.setProperty('--bm-shadow', entry[3])
+
+})()
+
+// ── Drag tooltip ──────────────────────────────────────────────────────────────
+var tooltip = document.getElementById('dragTooltip')
+document.querySelectorAll('.bookmarklet').forEach(function (btn) {
+  btn.addEventListener('mouseenter', function () { tooltip.classList.add('show') })
+  btn.addEventListener('mouseleave', function () { tooltip.classList.remove('show') })
+  btn.addEventListener('click', function (e) {
+    e.preventDefault()
+    tooltip.classList.remove('show')
+    alert('Drag this button to your Bookmarks Bar, then click it when you\'re on a Compass class page.')
+  })
+})
+
+// ── Sandbox ───────────────────────────────────────────────────────────────────
+function runSandbox() {
+  var code = document.getElementById('sandboxInput').value.trim()
+  if (!code) return
+  var html = [
+    '<html><head>',
+    '<style>body{font-family:sans-serif;font-size:13px;padding:1rem;color:#111827;}',
+    'pre{background:#f3f4f6;padding:.75rem;border-radius:.4rem;font-size:12px;white-space:pre-wrap;word-break:break-all;margin-bottom:.5rem;}',
+    '.err{background:#fef2f2;color:#dc2626;}</style></head><body>',
+    '<div id="out"></div>',
+    '<scr'+'ipt>',
+    'var _l=console.log.bind(console);',
+    'console.log=function(){var e=document.createElement("pre");',
+    'e.textContent=Array.from(arguments).map(function(a){return typeof a==="object"?JSON.stringify(a,null,2):String(a)}).join(" ");',
+    'document.getElementById("out").appendChild(e);_l.apply(console,arguments)};',
+    'try{',code,
+    '}catch(e){var x=document.createElement("pre");x.className="err";',
+    'x.textContent="❌ "+e.message;document.getElementById("out").appendChild(x);}',
+    '</'+'script></body></html>'
+  ].join('')
+  document.getElementById('sandbox').srcdoc = html
+}
+function clearSandbox() {
+  document.getElementById('sandboxInput').value = ''
+  document.getElementById('sandbox').srcdoc = "<html><body style='font-family:sans-serif;padding:1rem;color:#9ca3af;font-size:13px;'>Cleared.</body></html>"
+}
 </script>
 </body>
 </html>
