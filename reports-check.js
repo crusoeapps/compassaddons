@@ -56,6 +56,29 @@ $(document).ready(function() {
     return null
   }
 
+  // ── Cycle-scoped task filter ─────────────────────────────────────────────
+  // GetAllLearningTasksByActivityId is scoped to an ACTIVITY only — it has no
+  // cycle parameter, so for a full-year class it returns BOTH semesters'
+  // learning tasks. Compass itself is not at fault here: the activities list
+  // (GetOpenCycleActivitiesByUserId) is correctly cycle-scoped, and every
+  // task carries semesterReportCycles telling us which cycle it belongs to.
+  //
+  // Previously only processTaskIssues applied this filter. That meant
+  // processExcellenceEndeavour saw Semester Two's tasks while reporting on
+  // Semester One — and because those tasks are unsubmitted and ungraded
+  // until that semester is marked, they set allOnTime/allGradesEntered to
+  // false and silently disqualified students from Semester One awards.
+  //
+  // Defined once, used by all three consumers, so the three can't drift apart.
+  function tasksForCycle(taskData, cycleId) {
+    if (!taskData || !taskData.d || !taskData.d.data) return []
+    return taskData.d.data.filter(function(t) {
+      return t.semesterReportCycles && t.semesterReportCycles.some(function(s) {
+        return s.includeInSemesterReports === true && s.reportCycleId == cycleId
+      })
+    })
+  }
+
   function getMinTasks(subjectName, activityName) {
     var yr = detectYearLevel(subjectName, activityName)
     if (yr !== 7 && yr !== 8) return 3
@@ -699,7 +722,13 @@ $(document).ready(function() {
     var hasError = false, hasWarning = false
 
     if (total === 0) {
-      $('<div>').css({ padding: '12px 14px', fontSize: '12px', color: '#9ca3af' }).text('No classes found for this cycle.').appendTo(staffBody)
+      // Compass returned an empty activity list for this cycle. This is not a
+      // script fault — it means no activities are attached to this report
+      // cycle for this teacher yet (typical for a future semester whose
+      // reports haven't been set up in Compass Reports admin).
+      $('<div>').css({ padding: '12px 14px', fontSize: '12px', color: '#9ca3af' })
+        .text('No classes attached to this report cycle in Compass yet — nothing to check.')
+        .appendTo(staffBody)
       pill.removeClass('loading').addClass('complete').text('No classes')
       return
     }
@@ -863,8 +892,11 @@ $(document).ready(function() {
         // an empty grade on one task (e.g. Sophie Wardell missing KAT 2) — an
         // award should never be granted if any task has no result entered.
         var submissionByStudent = {}
-        if (taskData && taskData.d && taskData.d.data) {
-          $.each(taskData.d.data, function() {
+        // Cycle-scoped: without this, another semester's unsubmitted tasks
+        // set allOnTime/allGradesEntered false and disqualify everyone.
+        var cycleTasks = tasksForCycle(taskData, cycleId)
+        if (cycleTasks.length) {
+          $.each(cycleTasks, function() {
             $.each(this.students, function() {
               var uid = this.userId
               if (!submissionByStudent[uid]) {
@@ -963,11 +995,9 @@ $(document).ready(function() {
 
       function processTaskIssues(tasks, classlist) {
         var katCount = 0
-        $.each(tasks.d.data, function() {
+        // Same cycle filter as the other two consumers — see tasksForCycle.
+        $.each(tasksForCycle(tasks, cycleId), function() {
           var t = this
-          if (!(t.semesterReportCycles && t.semesterReportCycles.some(
-            function(s) { return s.includeInSemesterReports === true && s.reportCycleId == cycleId }
-          ))) return
 
           katCount++
           // Real task name on the pill, truncated so it doesn't blow out the row
@@ -998,8 +1028,19 @@ $(document).ready(function() {
           if (!(t.name.startsWith("Key Assessment Task") || t.name.startsWith("Unit") || t.name.startsWith("Exam") || t.name.startsWith("SAC") || t.name.startsWith("Semester") || t.name.startsWith("Structured"))) {
             ltWarn(`${shortName}: does not follow naming format`)
           }
-          if (!(t.taskTitleOnReport.startsWith("Key Assessment Task") || t.taskTitleOnReport.startsWith("Unit") || t.taskTitleOnReport.startsWith("Exam") || t.taskTitleOnReport.startsWith("SAC") || t.taskTitleOnReport.startsWith("Semester") || t.taskTitleOnReport.startsWith("Structured"))) {
-            ltWarn(`${shortName}: title on report does not follow naming format`)
+          // "Title on Report" is genuinely optional in Compass — a task that
+          // has never had it set returns undefined, and calling .startsWith()
+          // on undefined throws. Because that throw happens mid-loop inside
+          // processTaskIssues, it aborted the whole function: the class lost
+          // every remaining check AND its Excellence & Endeavour panel, with
+          // nothing on screen to indicate anything had gone wrong.
+          //
+          // Defaulting to '' keeps the check working and still correctly
+          // flags a blank title as a naming-format warning, rather than
+          // skipping it or taking the class down.
+          var titleOnReport = t.taskTitleOnReport || ''
+          if (!(titleOnReport.startsWith("Key Assessment Task") || titleOnReport.startsWith("Unit") || titleOnReport.startsWith("Exam") || titleOnReport.startsWith("SAC") || titleOnReport.startsWith("Semester") || titleOnReport.startsWith("Structured"))) {
+            ltWarn(`${shortName}: title on report '${titleOnReport || '(blank)'}' does not follow naming format`)
           }
           if (t.includeInOverall) {
             ltWarn(`${shortName}: is emphasised — untick Emphasise in Task Summary`)
@@ -1007,7 +1048,7 @@ $(document).ready(function() {
           if (t.showTaskDueDates) {
             ltWarn(`${shortName}: shows due date on report — untick Display Task Due Dates`)
           }
-          if (t.name.includes(" : ") || t.taskTitleOnReport.includes(" : ")) {
+          if (t.name.includes(" : ") || titleOnReport.includes(" : ")) {
             ltWarn(`${shortName}: space before colon in name`)
           }
           if (!t.dueDateTimestamp) {
@@ -1055,9 +1096,10 @@ $(document).ready(function() {
 
         // Build userId -> submissionStatus map from Learning Task data
         // (matches Andrew's loadGPA pattern: cross-reference by numeric id, not name)
-        var submittedIds = {} // userId -> true if submitted (status 3 or 4) on ANY task
-        if (taskData && taskData.d && taskData.d.data) {
-          $.each(taskData.d.data, function() {
+        var submittedIds = {} // userId -> true if submitted (status 3 or 4) on ANY task in THIS cycle
+        var cycleTasks = tasksForCycle(taskData, cycleId)
+        if (cycleTasks.length) {
+          $.each(cycleTasks, function() {
             $.each(this.students, function() {
               if (this.submissionStatus === 3 || this.submissionStatus === 4) {
                 submittedIds[this.userId] = true
