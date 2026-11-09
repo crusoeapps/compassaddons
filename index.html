@@ -290,7 +290,8 @@
   <div class="howto">
     <div class="howto-icon">📌</div>
     <div class="howto-body">
-      <strong>How to use:</strong> Drag a coloured button below to your Bookmarks Bar. Then open a class page in Compass and click the bookmark.
+      <strong>How to use:</strong> Drag the <strong>Compass Tools</strong> button below to your Bookmarks Bar once. Then click it on any Compass page and pick a tool.
+      You never need to replace it: it always loads the latest version of every tool.
       If your bar isn't visible: <kbd>Menu</kbd> → <kbd>Bookmarks</kbd> → <kbd>Show Bookmarks Bar</kbd>.
     </div>
   </div>
@@ -302,8 +303,34 @@
     <div class="legend-item"><div class="legend-dot exp"></div> Experimental — use with care</div>
   </div>
 
+  <!-- One-button launcher -->
+  <div class="section-label">One button for everything</div>
+  <div class="tool-grid">
+
+    <div class="tool-card stable">
+      <div class="tool-card-stripe"></div>
+      <div class="tool-card-body">
+        <div class="tool-card-name">Compass Tools</div>
+        <div class="tool-card-desc">One bookmark that opens a menu of every tool below. Install it once and you'll always get the latest version, so there's nothing to update when tools change.</div>
+        <div class="tool-card-tag stable">Recommended</div>
+      </div>
+      <div class="tool-card-drag">
+        <a href="javascript:(function(){var s=document.createElement('script');s.src='https://crusoeapps.github.io/compassaddons/compass-tools.js?t='+Math.floor(Date.now()/3e5);document.body.appendChild(s);})();"
+           class="bookmarklet" id="ct-btn">
+          <span class="bookmarklet-arrow">⇧</span>
+          <span>Compass Tools</span>
+        </a>
+        <div class="drag-hint-text">
+          <strong>Drag to bookmarks</strong>
+          then click on any Compass page
+        </div>
+      </div>
+    </div>
+
+  </div>
+
   <!-- Stable tools -->
-  <div class="section-label">Stable tools</div>
+  <div class="section-label">Stable tools (individual buttons — also update themselves)</div>
   <div class="tool-grid">
 
     <div class="tool-card stable">
@@ -317,7 +344,7 @@
       </div>
       <div class="tool-card-drag">
         <!-- ↓ Button label auto-filled by JS; colour set via CSS vars -->
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?v=8';})();"
+        <a href="javascript:(function(){var s=document.createElement('script');s.src='https://crusoeapps.github.io/compassaddons/class-dashboard.js?t='+Math.floor(Date.now()/3e5);document.body.appendChild(s);})();"
            class="bookmarklet" id="arc-btn">
           <span class="bookmarklet-arrow">⇧</span>
           <span id="arc-btn-label">Advisory Rubric Calculator</span>
@@ -339,7 +366,7 @@
         <span class="updated-badge" id="rc-badge"></span>
       </div>
       <div class="tool-card-drag">
-        <a href="javascript:(function(){document.body.appendChild(document.createElement('script')).src='https://crusoeapps.github.io/compassaddons/reports-check.js?v=37';})();"
+        <a href="javascript:(function(){var s=document.createElement('script');s.src='https://crusoeapps.github.io/compassaddons/reports-check.js?t='+Math.floor(Date.now()/3e5);document.body.appendChild(s);})();"
            class="bookmarklet" id="rc-btn">
           <span class="bookmarklet-arrow">⇧</span>
           <span id="rc-btn-label">Reports Check 3.0</span>
