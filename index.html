@@ -178,6 +178,13 @@
     }
     .bookmarklet:active { cursor: grabbing; transform: translateY(0); }
     .bookmarklet-arrow { font-size: 16px; animation: bounce 1.6s ease-in-out infinite; }
+    /* Plain link to a page on this site (not a bookmarklet) */
+    .page-link {
+      display: inline-flex; align-items: center; padding: 9px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; color: #fff; background: #1D5FA6;
+      text-decoration: none; white-space: nowrap; flex-shrink: 0;
+    }
+    .page-link:hover { filter: brightness(0.92); }
     @keyframes bounce {
       0%, 100% { transform: translateY(0); }
       50%       { transform: translateY(-3px); }
@@ -374,6 +381,42 @@
         <div class="drag-hint-text">
           <strong>Drag to bookmarks</strong>
           then click on any Compass page
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- In the Compass Tools menu only -->
+  <div class="section-label">Also in the Compass Tools menu</div>
+  <div class="tool-grid">
+
+    <div class="tool-card testing">
+      <div class="tool-card-stripe"></div>
+      <div class="tool-card-body">
+        <div class="tool-card-name">Student Data Dashboard</div>
+        <div class="tool-card-desc">Literacy and numeracy dashboard: PAT, NAPLAN and teacher judgements pulled live from Compass using your own login. Shows whatever Compass returns; some columns may be empty while it's being tested.</div>
+        <div class="tool-card-tag testing">In testing</div>
+      </div>
+      <div class="tool-card-drag">
+        <div class="drag-hint-text">
+          <strong>Open from the Compass Tools button</strong>
+          on any Compass page
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-card stable">
+      <div class="tool-card-stripe"></div>
+      <div class="tool-card-body">
+        <div class="tool-card-name">Student Voice</div>
+        <div class="tool-card-desc">Student survey results, filtered by semester, gender and subject (subjects with 3 or more classes). No teacher names, individual classes or written comments, and no result covers fewer than 10 students.</div>
+        <div class="tool-card-tag stable">Stable</div>
+      </div>
+      <div class="tool-card-drag">
+        <a href="student-voice.html" target="_blank" rel="noopener" class="page-link">Open Student Voice</a>
+        <div class="drag-hint-text">
+          <strong>Also in the Compass Tools menu</strong>
         </div>
       </div>
     </div>

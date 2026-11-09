@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Voice</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sd:#D64A1A;--d:#F5A742;--a:#93C6E0;--sa:#1D5FA6;
+  --gw:#2E7D4F;--wc:#8B4A82;
+  --bg:#F4F6FA;--card:#fff;--border:#DDE3EE;
+  --text:#1A1F36;--muted:#6B7694;
+}
+body{font-family:'DM Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:48px}
+header{background:var(--sa);color:#fff;padding:18px 32px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+header p{font-size:13px;color:rgba(255,255,255,.75);margin-top:2px}
+main{max-width:1100px;margin:0 auto;padding:24px 32px 0}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:18px}
+.bar .f{display:inline-flex;align-items:center;gap:8px}
+.bar label{font-size:13px;font-weight:700;color:var(--muted)}
+select{font:inherit;font-size:14px;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--text)}
+.count{font-size:13px;color:var(--muted);flex-basis:100%}
+.withheld{background:#FFF3E0;border:1.5px solid #FF9800;border-radius:10px;padding:16px 18px;color:#7A3A00;font-size:14px;line-height:1.5;margin-bottom:18px}
+.count strong{color:var(--text)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+.card h2{font-size:15px;font-weight:800;margin-bottom:12px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.lrow{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:12px;align-items:center;margin-bottom:9px}
+.llabel{font-size:13px;line-height:1.35}
+.ltrack{display:flex;height:26px;border-radius:5px;overflow:hidden;background:#EEF1F6}
+.lseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;min-width:0}
+.lseg.light{color:#1A1F36}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.hrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:10px;align-items:center;margin-bottom:8px}
+.hopt{font-size:12.5px;line-height:1.3}
+.htrack{height:20px;background:#EEF1F6;border-radius:4px;overflow:hidden}
+.hfill{height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:11px;font-weight:700;color:#fff;border-radius:4px}
+.ins{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.ins h3{font-size:13px;font-weight:800;margin-bottom:8px}
+.ins-item{border-left:3px solid var(--border);padding:4px 0 4px 10px;margin-bottom:10px}
+.ins-t{font-size:13px;font-weight:700}
+.ins-e{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:center}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.03em}
+.up{color:var(--gw);font-weight:700}.down{color:var(--sd);font-weight:700}
+.note{font-size:12px;color:var(--muted);line-height:1.5}
+.msg{padding:40px 0;text-align:center;color:var(--muted)}
+.table-wrap{overflow-x:auto}
+@media (max-width:760px){
+  header{padding:16px}
+  main{padding:16px 16px 0}
+  .two,.ins{grid-template-columns:1fr}
+  .bar .f{width:100%}.bar .f label{width:70px}.bar .f select{flex:1;min-width:0}
+  .lrow{grid-template-columns:1fr;gap:4px}
+  .hrow{grid-template-columns:1fr;gap:3px}
+}
+@media print{header{-webkit-print-color-adjust:exact;print-color-adjust:exact}.lseg,.hfill,.legend i{-webkit-print-color-adjust:exact;print-color-adjust:exact}.bar select{border:none}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Student Voice</h1>
+    <p>Crusoe College student survey · totals only, no teacher, class or student details</p>
+  </div>
+</header>
+<main>
+  <div class="bar">
+    <span class="f"><label for="sem">Semester</label><select id="sem"></select></span>
+    <span class="f"><label for="gen">Gender</label><select id="gen"></select></span>
+    <span class="f"><label for="sub">Subject</label><select id="sub"></select></span>
+    <span class="count" id="count"></span>
+  </div>
+  <div id="out"><div class="msg">Loading…</div></div>
+  <p class="note" id="rules"></p>
+</main>
+
+<script>
+(function () {
+  var SEG = ['#D64A1A', '#F5A742', '#93C6E0', '#1D5FA6']
+  var el = function (id) { return document.getElementById(id) }
+  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+  var pct = function (n, t) { return t ? Math.round(n / t * 100) : 0 }
+  var data
+
+  fetch('student-voice-data.json?t=' + Math.floor(Date.now() / 300000))
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+    .then(function (d) { data = d; init() })
+    .catch(function () { el('out').innerHTML = '<div class="msg">Could not load the survey results. Try again shortly.</div>' })
+
+  var semName = function (id) { return id === 'ALL' ? 'All semesters' : id.replace('S1', 'Semester 1').replace('S2', 'Semester 2') }
+  var option = function (v, label) { return '<option value="' + esc(v) + '">' + esc(label) + '</option>' }
+
+  function init() {
+    var sems = data.semesters || []
+    if (!sems.length) { el('out').innerHTML = '<div class="msg">No results published yet.</div>'; return }
+    var opts = sems.slice().reverse().map(function (s) { return option(s.id, semName(s.id)) })
+    if (data.all) opts.push(option('ALL', 'All semesters'))
+    el('sem').innerHTML = opts.join('')
+    el('gen').innerHTML = option('*', 'All genders') + data.genders.map(function (g) { return option(g, g) }).join('')
+    el('sub').innerHTML = option('*', 'All subjects') + data.subjects.map(function (s) { return option(s.id, s.label) }).join('')
+    ;['sem', 'gen', 'sub'].forEach(function (id) { el(id).onchange = render })
+    el('rules').textContent = 'Teacher names, individual classes and written comments are never shown. ' +
+      'A subject is listed only if it has 3 or more classes taught by at least 2 teachers. ' +
+      'Every result covers at least ' + data.minResponses + ' responses, and a result is also withheld if it could be used to work out a smaller group. ' +
+      'Semester 1 = January–June, Semester 2 = July–December.'
+    render()
+  }
+
+  function bucket(id) { return id === 'ALL' ? data.all : data.semesters.filter(function (s) { return s.id === id })[0] }
+  function cellKey() { return el('gen').value + '|' + el('sub').value }
+
+  function agree(c) { var t = c[0] + c[1] + c[2] + c[3]; return t ? { pct: pct(c[2] + c[3], t), dis: pct(c[0] + c[1], t) } : null }
+
+  function render() {
+    var b = bucket(el('sem').value)
+    var t = b && b.cells[cellKey()]
+    if (!t) {
+      el('count').textContent = ''
+      el('out').innerHTML = '<div class="withheld"><strong>Not shown for this combination.</strong> Either fewer than ' + data.minResponses +
+        ' students responded, or showing it would let someone work out the answers of a smaller group. Try a broader filter, such as All genders.</div>' +
+        (data.semesters.length > 1 ? trend() : '')
+      return
+    }
+    el('count').innerHTML = '<strong>' + t.n + '</strong> responses'
+    var h = ''
+
+    // Likert
+    h += '<section class="card"><h2>How students rated their classes</h2><div class="legend">' +
+      data.scale.map(function (l, i) { return '<span><i style="background:' + SEG[i] + '"></i>' + esc(l) + '</span>' }).join('') + '</div>'
+    data.questions.forEach(function (q, qi) {
+      var c = t.likert[qi], tot = c[0] + c[1] + c[2] + c[3]
+      h += '<div class="lrow"><div class="llabel">' + esc(q) + '</div><div class="ltrack">'
+      c.forEach(function (n, i) {
+        var p = pct(n, tot); if (!p) return
+        h += '<div class="lseg' + (i === 2 ? ' light' : '') + '" style="width:' + p + '%;background:' + SEG[i] + '" title="' + esc(data.scale[i]) + ': ' + p + '% (' + n + ')">' + (p >= 8 ? p + '%' : '') + '</div>'
+      })
+      h += '</div></div>'
+    })
+    h += '</section>'
+
+    // Going well / change
+    h += '<div class="two">' + bars('What is going well', '#2E7D4F', data.goingWellOptions, t.goingWell) +
+      bars('What students would change', '#8B4A82', data.changeOptions, t.change) + '</div>'
+
+    // Insights (same wording as the Student Voice dashboard)
+    h += insights(t)
+
+    // Trend across semesters
+    if (data.semesters.length > 1) h += trend()
+
+    el('out').innerHTML = h
+  }
+
+  function bars(title, colour, opts, counts) {
+    var order = opts.map(function (o, i) { return i }).sort(function (a, b) { return counts[b] - counts[a] })
+    var mx = Math.max.apply(null, counts.concat([1]))
+    var h = '<section class="card"><h2 style="color:' + colour + '">' + esc(title) + '</h2>'
+    order.forEach(function (i) {
+      var n = counts[i]
+      h += '<div class="hrow"><div class="hopt">' + esc(opts[i]) + '</div><div class="htrack"><div class="hfill" style="width:' + Math.round(n / mx * 100) + '%;background:' + colour + ';min-width:' + (n ? 30 : 0) + 'px">' + (n || '') + '</div></div></div>'
+    })
+    return h + '</section>'
+  }
+
+  function insights(t) {
+    if (t.n < data.minResponses) return ''
+    var stats = data.questions.map(function (q, i) { var a = agree(t.likert[i]); return a ? { key: q, pct: a.pct, dis: a.dis } : null }).filter(Boolean)
+    var by = stats.slice().sort(function (a, b) { return b.pct - a.pct })
+    var bot = by.slice().reverse()
+    var top = function (opts, c) { var i = c.indexOf(Math.max.apply(null, c)); return c[i] > 0 ? [opts[i], c[i]] : null }
+    var gw = top(data.goingWellOptions, t.goingWell), wc = top(data.changeOptions, t.change)
+    var hi = [], ex = []
+    if (by[0]) hi.push(['Strong student agreement', by[0].pct + '% agree or strongly agree that "' + by[0].key + '" — the highest rated area across ' + t.n + ' responses.'])
+    if (gw) hi.push(['What students value most', '"' + gw[0] + '" was selected by ' + gw[1] + ' students (' + pct(gw[1], t.n) + '%) as something going well.'])
+    if (by[1]) hi.push(['Consistent strength', by[1].pct + '% of students rated "' + by[1].key + '" positively.'])
+    if (bot[0]) ex.push(['Area with most room to grow', '"' + bot[0].key + '" had the lowest agreement at ' + bot[0].pct + '%, with ' + bot[0].dis + '% disagreeing.'])
+    if (wc) ex.push(['Top student suggestion', '"' + wc[0] + '" was the most-requested change, selected by ' + wc[1] + ' students (' + pct(wc[1], t.n) + '%).'])
+    if (bot[1]) ex.push(['Second area to explore', '"' + bot[1].key + '" received ' + bot[1].pct + '% positive ratings.'])
+    var list = function (items) { return items.map(function (i) { return '<div class="ins-item"><div class="ins-t">' + esc(i[0]) + '</div><div class="ins-e">' + esc(i[1]) + '</div></div>' }).join('') }
+    return '<section class="card"><h2>Key insights</h2><div class="ins"><div><h3 style="color:#2E7D4F">Highlights</h3>' + list(hi) +
+      '</div><div><h3 style="color:#D64A1A">Areas to explore</h3>' + list(ex) + '</div></div></section>'
+  }
+
+  function trend() {
+    var sems = data.semesters, key = cellKey()
+    var h = '<section class="card"><h2>Change over time (% agree or strongly agree)</h2><div class="table-wrap"><table><thead><tr><th>Question</th>' +
+      sems.map(function (s) { return '<th>' + esc(s.id) + '</th>' }).join('') + '<th>Change</th></tr></thead><tbody>'
+    data.questions.forEach(function (q, qi) {
+      var vals = sems.map(function (s) { var c = s.cells[key]; var a = c && agree(c.likert[qi]); return a ? a.pct : null })
+      var first = vals[vals.length - 2], last = vals[vals.length - 1]
+      var diff = first != null && last != null ? last - first : null
+      h += '<tr><td>' + esc(q) + '</td>' + vals.map(function (v) { return '<td>' + (v == null ? '—' : v + '%') + '</td>' }).join('') +
+        '<td class="' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '') + '">' + (diff == null ? '—' : (diff > 0 ? '+' : '') + diff + ' pts') + '</td></tr>'
+    })
+    return h + '</tbody></table></div><p class="note" style="margin-top:8px">Change compares the latest semester with the one before it. A dash means that semester is not shown for this combination.</p></section>'
+  }
+})()
+</script>
+</body>
+</html>

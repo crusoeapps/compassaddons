@@ -16,9 +16,13 @@
   var BASE = 'https://crusoeapps.github.io/compassaddons/'
 
   // needsClass: tool only works on a class page (#activity/... or #session/...)
+  // page:       opens a page from this site in a new tab instead of running a script
+  // testing:    shows an "In testing" tag in the menu
   var TOOLS = [
-    { file: 'class-dashboard.js', name: 'Advisory Rubric Calculator', desc: 'KATs, GPA, attendance, behaviour, extra-curricular', needsClass: true },
-    { file: 'reports-check.js',   name: 'Reports Check',              desc: 'Missing report elements, task setup, Excellence & Endeavour', needsClass: false }
+    { file: 'class-dashboard.js',   name: 'Advisory Rubric Calculator', desc: 'KATs, GPA, attendance, behaviour, extra-curricular', needsClass: true },
+    { file: 'reports-check.js',     name: 'Reports Check',              desc: 'Missing report elements, task setup, Excellence & Endeavour' },
+    { file: 'student-data-dash.js', name: 'Student Data Dashboard',     desc: 'PAT, NAPLAN and teacher judgements, live from Compass', testing: true },
+    { file: 'student-voice.html',   name: 'Student Voice',              desc: 'Survey results by semester, gender and subject (opens a new tab)', page: true }
   ]
 
   var PANEL_ID = 'crusoe-compass-tools'
@@ -33,6 +37,9 @@
 
   function loadTool(tool) {
     panel.remove()
+    if (tool.page) { window.open(BASE + tool.file, '_blank', 'noopener'); return }
+    // Lets a tool that also runs as a userscript know it came from this menu.
+    window.__crusoeToolsLaunch = true
     var s = document.createElement('script')
     s.charset = 'utf-8'
     s.src = BASE + tool.file + '?t=' + freshness()
@@ -73,6 +80,12 @@
     var n = document.createElement('div')
     n.setAttribute('style', 'font-weight:600' + (ok ? '' : ';color:#9ca3af'))
     n.textContent = tool.name
+    if (tool.testing) {
+      var tag = document.createElement('span')
+      tag.textContent = 'In testing'
+      tag.setAttribute('style', 'margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px;background:#FEF3C7;color:#92400E;vertical-align:1px')
+      n.appendChild(tag)
+    }
     var d = document.createElement('div')
     d.setAttribute('style', 'font-size:12px;color:#6b7280')
     d.textContent = ok ? tool.desc : 'Open a class page first'

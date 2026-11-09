@@ -1,0 +1,13 @@
+# PRIVACY: this repository is public. Never commit student or staff data,
+# survey exports, Compass responses or screenshots.
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.xlsm
+*.ods
+*.har
+# JSON is ignored except the published whole-school Student Voice totals,
+# which tools/build-student-voice.js generates.
+*.json
+!student-voice-data.json
