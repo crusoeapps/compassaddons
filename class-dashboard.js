@@ -1,7 +1,8 @@
 // Advisory Rubric Calculator — class-dashboard.js
 // Crusoe College | crusoeapps.github.io/compassaddons
-// Updated: 5 August 2026
-// Changes: Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
+// Updated: 9 November 2026
+// Changes: KATs (work completed) excludes Semester Exams for Year 10 students only
+// Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
 
 $(document).ready(function() {
@@ -218,7 +219,7 @@ $('<div>').addClass('button-print').text('🖨 Print to PDF')
 
 var headers = {
   'Name':            '',
-  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date.',
+  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Semester Exams are excluded for Year 10 students.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation.",
@@ -288,6 +289,24 @@ function getTasks(user) {
     })
 }
 
+// Year level for the KATs Year 10 exam exclusion. Always resolves (to '' on
+// failure or if no year-level field is present), so a lookup problem never
+// blocks the KATs score. It just falls back to the old behaviour (exams counted).
+function getYearLevel(user) {
+  var d = $.Deferred()
+  compassPost("/Services/User.svc/GetUserDetailsBlobByUserId", {
+    targetUserId: user, targetSchoolId: Compass.schoolId, page: 1, start: 0, limit: 25
+  }).done(function(r) {
+    var b = (r && r.d) || {}
+    d.resolve(b.userYearLevel || b.yearLevel || b.yearLevelName || b.userYearLevelShortName || '')
+  }).fail(function() { d.resolve('') })
+  return d.promise()
+}
+
+function isYear10(yearLevel) {
+  return /^(Year|Yr)?\s*10\b/i.test(String(yearLevel || '').trim())
+}
+
 function getGPA(user) {
   return compassPost("/Services/Gpa.svc/GetOverallGraphData", { userId: user }, { user: user })
 }
@@ -328,7 +347,10 @@ function loadStudents(students) {
       .appendTo('.dash' + user + ' .name')
 
     getAllAttendance(user).done((data) => loadAllAttendance(data, user))
-    getTasks(user).done(loadTasks)
+    var yearLevelPromise = getYearLevel(user)
+    getTasks(user).done(function(tasks) {
+      yearLevelPromise.always(function(yearLevel) { loadTasks(tasks, user, yearLevel) })
+    })
     getGPA(user).done(loadGPA)
     getEvents(user).done((data) => loadEvents(data, user))
     getStudentChronicle(user).done((data) => loadChronicleForStudent(data, user))
@@ -348,14 +370,17 @@ function loadAllAttendance(classes, user) {
 }
 
 // ── KATs ──────────────────────────────────────────────────────────────────────
-function loadTasks(tasks) {
-  var user = this.user
+function loadTasks(tasks, user, yearLevel) {
   var total = 0, submitted = 0, ontime = 0, overdue = 0, late = 0, pending = 0
+  // Year 10 only: Semester Exams don't count towards work completed
+  var excludeExams = isYear10(yearLevel)
+  var examsExcluded = 0
 
   $.each(tasks.d.data, function() {
     if (this.includeInSemesterReports) {
-      total++
       var isExam = /^Semester Exam/i.test(this.name || '')
+      if (isExam && excludeExams) { examsExcluded++; return }
+      total++
       var status = this.students[0].submissionStatus
       if (isExam) {
         switch (status) {
@@ -391,6 +416,9 @@ function loadTasks(tasks) {
   if (pending > 0) parts.push(pending + ' pending')
   if (overdue > 0) parts.push(overdue + ' overdue')
   var detail = total > 0 ? parts.join(', ') + ' of ' + total : 'No tasks'
+  if (examsExcluded > 0) {
+    detail += ' (' + examsExcluded + ' exam' + (examsExcluded !== 1 ? 's' : '') + ' excluded, Yr 10)'
+  }
 
   var el = $('.dash' + user + ' .kats')
   el.append(scoreBadge(score))
