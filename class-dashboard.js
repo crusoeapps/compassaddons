@@ -1,7 +1,9 @@
 // Advisory Rubric Calculator — class-dashboard.js
 // Crusoe College | crusoeapps.github.io/compassaddons
-// Updated: 9 November 2026
-// Changes: KATs (work completed) excludes Semester Exams for Year 10 students only
+// Updated: 11 November 2026
+// Changes: Total /20 now fills in (it never got its 'total' class); a failed
+//          Compass lookup now says so in its cell instead of staying blank
+// Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
 
@@ -228,9 +230,11 @@ var headers = {
 }
 
 $('<table>').append($('<thead>').append($('<tr>'))).appendTo('#dash')
-$.each(Object.keys(headers), function() {
-  var th = $('<th>').attr('title', headers[this]).text(this)
-  if (this === 'Total /20') th.addClass('total-col')
+// Use the name argument, not `this`: inside $.each `this` is a String object,
+// so `this === 'Total /20'` was never true and Total never got its class.
+$.each(Object.keys(headers), function(i, name) {
+  var th = $('<th>').attr('title', headers[name]).text(name)
+  if (name === 'Total /20') th.addClass('total-col')
   th.appendTo('#dash thead tr')
 })
 $('<tbody>').appendTo('#dash table')
@@ -325,6 +329,29 @@ function getEvents(userId) {
   }, { user: userId })
 }
 
+// ── Load errors ───────────────────────────────────────────────────────────────
+// A failed Compass request used to leave its cell blank with no message, and
+// the Total stayed blank too (it needs all five scores). Now the cell says
+// what failed, and the Total says why it's missing.
+function showLoadError(user, column, label, xhr, e) {
+  var status = xhr ? (xhr.status ? 'HTTP ' + xhr.status : 'no response') : 'unexpected data'
+  if (window.console) console.error('[Rubric Calculator] ' + label + ' failed for user ' + user + ' (' + status + ')', xhr || e)
+  var el = $('.dash' + user + ' .' + column)
+  el.empty()
+  el.append(scoreBadge('?'))
+  el.append($('<span>').addClass('detail-text-danger').text('Could not load ' + label + ' (' + status + ')'))
+  var total = $('.dash' + user + ' .total')
+  if (!total.children().length) total.empty().append($('<span>').addClass('detail-text-danger').text('Incomplete'))
+}
+
+function loadInto(request, user, column, label, handle) {
+  request
+    .done(function(data) {
+      try { handle(data) } catch (e) { showLoadError(user, column, label, null, e) }
+    })
+    .fail(function(xhr) { showLoadError(user, column, label, xhr) })
+}
+
 // ── Load students ─────────────────────────────────────────────────────────────
 function loadStudents(students) {
   students.d.sort((a, b) => a.uii.localeCompare(b.uii))
@@ -333,10 +360,10 @@ function loadStudents(students) {
     var user = this.uid
 
     $('<tr>').addClass('dash' + user).addClass(this.uii).appendTo('#dash tbody')
-    $.each(Object.keys(headers), function() {
-      var colClass = this.replace(/ /g, '-').replace('/', '').toLowerCase()
-      var td = $('<td>').addClass(colClass).attr('title', headers[this])
-      if (this === 'Total /20') td.addClass('total')
+    $.each(Object.keys(headers), function(i, name) {
+      var colClass = name.replace(/ /g, '-').replace('/', '').toLowerCase()
+      var td = $('<td>').addClass(colClass).attr('title', headers[name])
+      if (name === 'Total /20') td.addClass('total')
       td.appendTo('.dash' + user)
     })
 
@@ -346,14 +373,16 @@ function loadStudents(students) {
       .attr('id', user)
       .appendTo('.dash' + user + ' .name')
 
-    getAllAttendance(user).done((data) => loadAllAttendance(data, user))
+    loadInto(getAllAttendance(user), user, 'attendance', 'attendance', function(data) { loadAllAttendance(data, user) })
     var yearLevelPromise = getYearLevel(user)
-    getTasks(user).done(function(tasks) {
-      yearLevelPromise.always(function(yearLevel) { loadTasks(tasks, user, yearLevel) })
+    loadInto(getTasks(user), user, 'kats', 'learning tasks', function(tasks) {
+      yearLevelPromise.always(function(yearLevel) {
+        try { loadTasks(tasks, user, yearLevel) } catch (e) { showLoadError(user, 'kats', 'learning tasks', null, e) }
+      })
     })
-    getGPA(user).done(loadGPA)
-    getEvents(user).done((data) => loadEvents(data, user))
-    getStudentChronicle(user).done((data) => loadChronicleForStudent(data, user))
+    loadInto(getGPA(user), user, 'gpa', 'GPA', function(data) { loadGPA.call({ user: user }, data) })
+    loadInto(getEvents(user), user, 'extra-curricular', 'events', function(data) { loadEvents(data, user) })
+    loadInto(getStudentChronicle(user), user, 'behaviour', 'Chronicle', function(data) { loadChronicleForStudent(data, user) })
   })
 }
 
