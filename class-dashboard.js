@@ -377,6 +377,24 @@ function getChronicleCategories() {
   return chronicleCategoriesRequest
 }
 
+// The category list Compass's own profile page uses (Nov 2026). Its ids may
+// differ from GetChronicleCategories. Always resolves ([] if unavailable).
+var allChronicleCategoriesRequest = null
+function getAllChronicleCategories() {
+  if (!allChronicleCategoriesRequest) {
+    var d = $.Deferred()
+    $.get("/Services/ReferenceDataCache.svc/GetAllChronicleCategories")
+      .done(function(r) {
+        var list = r && r.d
+        if (list && !Array.isArray(list)) list = list.data || []
+        d.resolve(Array.isArray(list) ? list : [])
+      })
+      .fail(function() { d.resolve([]) })
+    allChronicleCategoriesRequest = d.promise()
+  }
+  return allChronicleCategoriesRequest
+}
+
 // Chronicle counts for every student in THIS class, fetched once. Proven
 // endpoint (June 2026). Used only if the per-student feed fails.
 var classChronicleRequest = null
@@ -595,35 +613,62 @@ function entryPointsFor(e, user) {
 
 function loadBehaviour(user) {
   getChronicleCategories().done(function(cats) {
-    var nameById = {}
-    cats.forEach(function(c) { nameById[c.id] = c.name })
-    getAllChronicleEntries(user, cats.map(function(c) { return c.id })).done(function(list) {
-      try {
-        var d = blankBehaviour(), recognised = 0, unscored = {}
-        list.forEach(function(e) {
-          var name = e.categoryName || e.category || nameById[e.categoryId]
-          if (!name) return
-          recognised++
-          var kind = categoryKind(name)
-          if (!kind) unscored[String(name).trim()] = (unscored[String(name).trim()] || 0) + 1
-          tallyBehaviour(d, kind, 1, entryPointsFor(e, user))
+    getAllChronicleCategories().done(function(allCats) {
+      var nameById = {}
+      cats.concat(allCats).forEach(function(c) { if (c && c.id != null && c.name) nameById[c.id] = c.name })
+      var ids = function(list) { return list.map(function(c) { return c.id }).filter(function(x) { return x != null }) }
+
+      // A request with the wrong category ids is accepted but returns an
+      // empty list (seen Nov 2026). Try: no filter, then the ids Compass's
+      // profile page uses, then the older list. Use the first that returns
+      // entries; if every option comes back empty, the record is empty.
+      var options = [[], ids(allCats), ids(cats)].filter(function(o, k, all) {
+        if (k > 0 && !o.length) return false
+        var key = JSON.stringify(o)
+        return all.findIndex(function(x) { return JSON.stringify(x) === key }) === k
+      })
+      var anyAccepted = false, lastReason = ''
+      function attempt(k) {
+        getAllChronicleEntries(user, options[k]).done(function(list) {
+          anyAccepted = true
+          if (list.length || k === options.length - 1) processEntries(list, k)
+          else attempt(k + 1)
+        }).fail(function(xhr, reason) {
+          lastReason = reason || ('HTTP ' + (xhr && xhr.status))
+          if (k < options.length - 1) attempt(k + 1)
+          else if (anyAccepted) processEntries([], k)
+          else behaviourFromClass(user, lastReason)
         })
-        // Entries came back but none had a category we can read: don't
-        // pretend that's a clean record, use the class counts instead.
-        if (list.length && !recognised) throw new Error('entries have no category')
-        // Say what was read, so a '3 / No entries' can be told apart from
-        // a genuine clean record. Category names only, never entry text.
-        var names = Object.keys(unscored)
-        if (window.console) console.log('[Rubric Calculator] user ' + user + ': ' + list.length + ' Chronicle entries read; not scored: ' +
-          (names.map(function(n) { return n + ' x' + unscored[n] }).join(', ') || 'none'))
-        var note = list.length + ' entr' + (list.length === 1 ? 'y' : 'ies') + ' read'
-        if (names.length) note += ', ' + names.reduce(function(t, n) { return t + unscored[n] }, 0) + ' in unscored categories'
-        renderBehaviour(user, d, note, names.join(', '))
-      } catch (e) {
-        behaviourFromClass(user, e.message)
       }
-    }).fail(function(xhr, reason) {
-      behaviourFromClass(user, reason || ('HTTP ' + (xhr && xhr.status)))
+
+      function processEntries(list, k) {
+        try {
+          var d = blankBehaviour(), recognised = 0, unscored = {}
+          list.forEach(function(e) {
+            var name = e.categoryName || e.category || nameById[e.categoryId]
+            if (!name) return
+            recognised++
+            var kind = categoryKind(name)
+            if (!kind) unscored[String(name).trim()] = (unscored[String(name).trim()] || 0) + 1
+            tallyBehaviour(d, kind, 1, entryPointsFor(e, user))
+          })
+          // Entries came back but none had a category we can read: don't
+          // pretend that's a clean record, use the class counts instead.
+          if (list.length && !recognised) throw new Error('entries have no category')
+          // Say what was read, so a '3 / No entries' can be told apart from
+          // a genuine clean record. Category names only, never entry text.
+          var names = Object.keys(unscored)
+          if (window.console) console.log('[Rubric Calculator] user ' + user + ': ' + list.length + ' Chronicle entries read (category filter option ' + (k + 1) + ' of ' + options.length + '); not scored: ' +
+            (names.map(function(n) { return n + ' x' + unscored[n] }).join(', ') || 'none'))
+          var note = list.length + ' entr' + (list.length === 1 ? 'y' : 'ies') + ' read'
+          if (names.length) note += ', ' + names.reduce(function(t, n) { return t + unscored[n] }, 0) + ' in unscored categories'
+          renderBehaviour(user, d, note, names.join(', '))
+        } catch (e) {
+          behaviourFromClass(user, e.message)
+        }
+      }
+
+      attempt(0)
     })
   }).fail(function(xhr) {
     showLoadError(user, 'behaviour', 'Chronicle categories', xhr)
