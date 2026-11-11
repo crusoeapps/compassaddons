@@ -333,11 +333,38 @@ function getGPA(user) {
 // Per-student Chronicle feed (all classes). Without filterCategoryIds this
 // returned HTTP 500 (Nov 2026), so every category id is sent. If Compass
 // still rejects it, Behaviour falls back to the class-level counts below.
-function getStudentChronicle(userId, categoryIds) {
+function getStudentChronicle(userId, categoryIds, page, limit) {
   return compassPost("/Services/ChronicleV2.svc/GetUserChronicleFeedThin", {
     targetUserId: userId, startDate: startDate, endDate: endDate,
-    filterCategoryIds: categoryIds, asParent: false, page: 1, start: 0, limit: 200
+    filterCategoryIds: categoryIds, asParent: false,
+    page: page, start: (page - 1) * limit, limit: limit
   }, { user: userId })
+}
+
+// The feed comes back as GROUPS (d.data[]), each holding the actual entries
+// in chronicleEntries[], with d.total = number of groups. Seen in a real
+// Compass response, Nov 2026. Fetch every page and return the flat entries.
+function getAllChronicleEntries(userId, categoryIds) {
+  var result = $.Deferred(), entries = [], groupsSeen = 0, page = 1, LIMIT = 100
+  function next() {
+    getStudentChronicle(userId, categoryIds, page, LIMIT).done(function(feed) {
+      try {
+        var d = feed && feed.d
+        var groups = (d && (d.data || d)) || []
+        if (!Array.isArray(groups)) throw new Error('feed is not a list')
+        var total = (d && typeof d.total === 'number') ? d.total : groups.length
+        groups.forEach(function(g) {
+          if (Array.isArray(g.chronicleEntries)) entries.push.apply(entries, g.chronicleEntries)
+          else entries.push(g)
+        })
+        groupsSeen += groups.length
+        if (groups.length && groupsSeen < total && page < 30) { page++; next() }
+        else result.resolve(entries)
+      } catch (e) { result.reject(null, e.message) }
+    }).fail(function(xhr) { result.reject(xhr) })
+  }
+  next()
+  return result.promise()
 }
 
 // Chronicle category names, fetched once. Proven endpoint (June 2026).
@@ -542,39 +569,52 @@ function categoryKind(name) {
 function blankBehaviour() { return { detentions: 0, suspensions: 0, ocwe: 0, negPoints: 0, commendations: 0 } }
 
 // entries: number of Chronicle entries; points: signed points for them.
+// The category decides whether points are good or bad; Compass may store
+// negative behaviour as either -3 or 3, so the size of the points is used.
 function tallyBehaviour(d, kind, entries, points) {
   if (!kind) return
-  if (kind === 'commendation') { if (points > 0) d.commendations += points; return }
+  var size = Math.abs(Number(points) || 0)
+  if (kind === 'commendation') { d.commendations += size; return }
   if (kind === 'detention')  d.detentions  += entries
   if (kind === 'suspension') d.suspensions += entries
   if (kind === 'ocwe')       d.ocwe        += entries
-  if (points < 0) d.negPoints += Math.abs(points)
+  d.negPoints += size
+}
+
+// Points for this student: an entry can cover several students, each with
+// their own points in attendees[]; otherwise use the entry's points.
+function entryPointsFor(e, user) {
+  if (Array.isArray(e.attendees)) {
+    for (var i = 0; i < e.attendees.length; i++) {
+      var a = e.attendees[i]
+      if (String(a.userIdAttendee) === String(user) && a.points != null) return Number(a.points) || 0
+    }
+  }
+  return Number(e.points) || 0
 }
 
 function loadBehaviour(user) {
   getChronicleCategories().done(function(cats) {
     var nameById = {}
     cats.forEach(function(c) { nameById[c.id] = c.name })
-    getStudentChronicle(user, cats.map(function(c) { return c.id })).done(function(feed) {
+    getAllChronicleEntries(user, cats.map(function(c) { return c.id })).done(function(list) {
       try {
-        var list = (feed && feed.d && (feed.d.data || feed.d)) || []
-        if (!Array.isArray(list)) throw new Error('feed is not a list')
         var d = blankBehaviour(), recognised = 0
         list.forEach(function(e) {
-          var name = e.category || e.categoryName || nameById[e.categoryId]
+          var name = e.categoryName || e.category || nameById[e.categoryId]
           if (!name) return
           recognised++
-          tallyBehaviour(d, categoryKind(name), 1, Number(e.points) || 0)
+          tallyBehaviour(d, categoryKind(name), 1, entryPointsFor(e, user))
         })
         // Entries came back but none had a category we can read: don't
         // pretend that's a clean record, use the class counts instead.
-        if (list.length && !recognised) throw new Error('feed entries have no category')
+        if (list.length && !recognised) throw new Error('entries have no category')
         renderBehaviour(user, d, null)
       } catch (e) {
         behaviourFromClass(user, e.message)
       }
-    }).fail(function(xhr) {
-      behaviourFromClass(user, 'HTTP ' + (xhr && xhr.status))
+    }).fail(function(xhr, reason) {
+      behaviourFromClass(user, reason || ('HTTP ' + (xhr && xhr.status)))
     })
   }).fail(function(xhr) {
     showLoadError(user, 'behaviour', 'Chronicle categories', xhr)
@@ -599,7 +639,7 @@ function behaviourFromClass(user, reason) {
           tallyBehaviour(d, kind, entries, kind === 'commendation' ? pts : -pts)
         })
       })
-      renderBehaviour(user, d, 'this class only')
+      renderBehaviour(user, d, 'this class only (whole-school feed: ' + reason + ')')
     } catch (e) {
       showLoadError(user, 'behaviour', 'Chronicle', null, e)
     }
