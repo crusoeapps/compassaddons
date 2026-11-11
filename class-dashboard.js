@@ -2,7 +2,8 @@
 // Crusoe College | crusoeapps.github.io/compassaddons
 // Updated: 11 November 2026
 // Changes: Total /20 now fills in (it never got its 'total' class); a failed
-//          Compass lookup now says so in its cell instead of staying blank
+//          Compass lookup now says so in its cell instead of staying blank;
+//          KATs no longer counts pending tasks, and Total flags them
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
@@ -63,6 +64,11 @@ function updateTotal(user) {
   el.append($('<span>').addClass('score-badge score-' + band[1]).text(total))
   el.append($('<span>').addClass('detail-text').css('font-weight', '600').text(band[2]))
   el.append($('<span>').addClass('detail-text').text(band[3]))
+  var pending = scores.pendingTasks || 0
+  if (pending > 0) {
+    el.append($('<span>').addClass('detail-text-warning')
+      .text('\u26A0 ' + pending + ' task' + (pending !== 1 ? 's' : '') + ' pending: score may change'))
+  }
 }
 
 $(`<div id="dash"><style type="text/css">
@@ -146,6 +152,13 @@ $(`<div id="dash"><style type="text/css">
   display: block;
   margin-top: 0.2em;
 }
+#dash .detail-text-warning {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+  margin-top: 2px;
+}
 #dash .detail-text-danger {
   font-size: 0.8em;
   color: #c0392b;
@@ -221,12 +234,12 @@ $('<div>').addClass('button-print').text('🖨 Print to PDF')
 
 var headers = {
   'Name':            '',
-  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Semester Exams are excluded for Year 10 students.',
+  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Semester Exams are excluded for Year 10 students.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation.",
   'Extra Curricular':'Score from excursions/incursions only (1=none, 2=one, 3=two–three, 4=four+). Total events shown; detention/suspension-linked events flagged separately.',
-  'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment.'
+  'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment. Flagged when a student has pending tasks, as the score may change.'
 }
 
 $('<table>').append($('<thead>').append($('<tr>'))).appendTo('#dash')
@@ -409,18 +422,19 @@ function loadTasks(tasks, user, yearLevel) {
     if (this.includeInSemesterReports) {
       var isExam = /^Semester Exam/i.test(this.name || '')
       if (isExam && excludeExams) { examsExcluded++; return }
-      total++
       var status = this.students[0].submissionStatus
+      // Pending (not submitted, not yet overdue) isn't counted either way;
+      // the Total is flagged instead so it's clear the score may change.
+      if (status === 1) { pending++; return }
+      total++
       if (isExam) {
         switch (status) {
-          case 1: pending++;             break
           case 2: submitted++; ontime++; break
           case 3: submitted++; ontime++; break
           case 4: submitted++; ontime++; break
         }
       } else {
         switch (status) {
-          case 1: pending++;             break
           case 2: overdue++;             break
           case 3: submitted++; ontime++; break
           case 4: submitted++; late++;   break
@@ -442,9 +456,9 @@ function loadTasks(tasks, user, yearLevel) {
   var parts = []
   if (ontime  > 0) parts.push(ontime  + ' on time')
   if (late    > 0) parts.push(late    + ' late')
-  if (pending > 0) parts.push(pending + ' pending')
   if (overdue > 0) parts.push(overdue + ' overdue')
-  var detail = total > 0 ? parts.join(', ') + ' of ' + total : 'No tasks'
+  var detail = total > 0 ? parts.join(', ') + ' of ' + total : (pending > 0 ? 'No tasks due yet' : 'No tasks')
+  if (pending > 0) detail += ' (' + pending + ' pending, not counted)'
   if (examsExcluded > 0) {
     detail += ' (' + examsExcluded + ' exam' + (examsExcluded !== 1 ? 's' : '') + ' excluded, Yr 10)'
   }
@@ -452,6 +466,8 @@ function loadTasks(tasks, user, yearLevel) {
   var el = $('.dash' + user + ' .kats')
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail))
+  if (!scoreTracker[user]) scoreTracker[user] = {}
+  scoreTracker[user].pendingTasks = pending
   recordScore(user, 'kats', score)
 }
 
