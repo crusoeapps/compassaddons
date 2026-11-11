@@ -599,17 +599,26 @@ function loadBehaviour(user) {
     cats.forEach(function(c) { nameById[c.id] = c.name })
     getAllChronicleEntries(user, cats.map(function(c) { return c.id })).done(function(list) {
       try {
-        var d = blankBehaviour(), recognised = 0
+        var d = blankBehaviour(), recognised = 0, unscored = {}
         list.forEach(function(e) {
           var name = e.categoryName || e.category || nameById[e.categoryId]
           if (!name) return
           recognised++
-          tallyBehaviour(d, categoryKind(name), 1, entryPointsFor(e, user))
+          var kind = categoryKind(name)
+          if (!kind) unscored[String(name).trim()] = (unscored[String(name).trim()] || 0) + 1
+          tallyBehaviour(d, kind, 1, entryPointsFor(e, user))
         })
         // Entries came back but none had a category we can read: don't
         // pretend that's a clean record, use the class counts instead.
         if (list.length && !recognised) throw new Error('entries have no category')
-        renderBehaviour(user, d, null)
+        // Say what was read, so a '3 / No entries' can be told apart from
+        // a genuine clean record. Category names only, never entry text.
+        var names = Object.keys(unscored)
+        if (window.console) console.log('[Rubric Calculator] user ' + user + ': ' + list.length + ' Chronicle entries read; not scored: ' +
+          (names.map(function(n) { return n + ' x' + unscored[n] }).join(', ') || 'none'))
+        var note = list.length + ' entr' + (list.length === 1 ? 'y' : 'ies') + ' read'
+        if (names.length) note += ', ' + names.reduce(function(t, n) { return t + unscored[n] }, 0) + ' in unscored categories'
+        renderBehaviour(user, d, note, names.join(', '))
       } catch (e) {
         behaviourFromClass(user, e.message)
       }
@@ -648,7 +657,7 @@ function behaviourFromClass(user, reason) {
   })
 }
 
-function renderBehaviour(user, d, scopeNote) {
+function renderBehaviour(user, d, scopeNote, noteTitle) {
   var score
   if (d.detentions >= 1 || d.suspensions >= 1) {
     score = (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) ? 1 : 2
@@ -668,7 +677,7 @@ function renderBehaviour(user, d, scopeNote) {
   el.empty()
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
-  if (scopeNote) el.append($('<span>').addClass('detail-text-warning').text(scopeNote))
+  if (scopeNote) el.append($('<span>').addClass('detail-text-warning').text(scopeNote).attr('title', noteTitle || ''))
   recordScore(user, 'behaviour', score)
 }
 
