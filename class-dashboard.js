@@ -3,7 +3,9 @@
 // Updated: 11 November 2026
 // Changes: Total /20 now fills in (it never got its 'total' class); a failed
 //          Compass lookup now says so in its cell instead of staying blank;
-//          KATs no longer counts pending tasks, and Total flags them
+//          KATs no longer counts pending tasks, and Total flags them;
+//          Extra Curricular counts events from attendance (Events.svc was
+//          a 404); Behaviour sends category ids, falls back to class counts
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
@@ -237,8 +239,8 @@ var headers = {
   'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Semester Exams are excluded for Year 10 students.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
-  'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation.",
-  'Extra Curricular':'Score from excursions/incursions only (1=none, 2=one, 3=two–three, 4=four+). Total events shown; detention/suspension-linked events flagged separately.',
+  'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation. Marked 'this class only' when Compass won't return the student's whole Chronicle.",
+  'Extra Curricular':'Events attended this year, from Compass attendance (1=none, 2=one, 3=two–three, 4=four+).',
   'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment. Flagged when a student has pending tasks, as the score may change.'
 }
 
@@ -328,18 +330,35 @@ function getGPA(user) {
   return compassPost("/Services/Gpa.svc/GetOverallGraphData", { userId: user }, { user: user })
 }
 
-// Updated 5 Aug 2026: corrected from GetUserChronicleFeed (was 404)
-function getStudentChronicle(userId) {
+// Per-student Chronicle feed (all classes). Without filterCategoryIds this
+// returned HTTP 500 (Nov 2026), so every category id is sent. If Compass
+// still rejects it, Behaviour falls back to the class-level counts below.
+function getStudentChronicle(userId, categoryIds) {
   return compassPost("/Services/ChronicleV2.svc/GetUserChronicleFeedThin", {
     targetUserId: userId, startDate: startDate, endDate: endDate,
-    start: 0, pageSize: 200, asParent: false, page: 1, limit: 200
+    filterCategoryIds: categoryIds, asParent: false, page: 1, start: 0, limit: 200
   }, { user: userId })
 }
 
-function getEvents(userId) {
-  return compassPost("/Services/Activities/Events.svc/GetEventsByUserId", {
-    userId: userId, startDate: startDate, endDate: endDate, page: 1, start: 0, limit: 200
-  }, { user: userId })
+// Chronicle category names, fetched once. Proven endpoint (June 2026).
+var chronicleCategoriesRequest = null
+function getChronicleCategories() {
+  if (!chronicleCategoriesRequest) {
+    chronicleCategoriesRequest = $.get("/Services/ReferenceDataCache.svc/GetChronicleCategories")
+      .then(function(r) { return (r && r.d) || [] })
+  }
+  return chronicleCategoriesRequest
+}
+
+// Chronicle counts for every student in THIS class, fetched once. Proven
+// endpoint (June 2026). Used only if the per-student feed fails.
+var classChronicleRequest = null
+function getClassChronicleUsage() {
+  if (!classChronicleRequest) {
+    classChronicleRequest = compassPost("/Services/ChronicleV2.svc/GetCategoryUsageCount", { type: 1, id: activityId }, {})
+      .then(function(r) { return (r && r.d) || [] })
+  }
+  return classChronicleRequest
 }
 
 // ── Load errors ───────────────────────────────────────────────────────────────
@@ -386,7 +405,10 @@ function loadStudents(students) {
       .attr('id', user)
       .appendTo('.dash' + user + ' .name')
 
-    loadInto(getAllAttendance(user), user, 'attendance', 'attendance', function(data) { loadAllAttendance(data, user) })
+    // Extra Curricular uses the same attendance response (its "Events" row).
+    var attendance = getAllAttendance(user)
+    loadInto(attendance, user, 'attendance', 'attendance', function(data) { loadAllAttendance(data, user) })
+    loadInto(attendance, user, 'extra-curricular', 'events', function(data) { loadExtraCurricular(data, user) })
     var yearLevelPromise = getYearLevel(user)
     loadInto(getTasks(user), user, 'kats', 'learning tasks', function(tasks) {
       yearLevelPromise.always(function(yearLevel) {
@@ -394,8 +416,7 @@ function loadStudents(students) {
       })
     })
     loadInto(getGPA(user), user, 'gpa', 'GPA', function(data) { loadGPA.call({ user: user }, data) })
-    loadInto(getEvents(user), user, 'extra-curricular', 'events', function(data) { loadEvents(data, user) })
-    loadInto(getStudentChronicle(user), user, 'behaviour', 'Chronicle', function(data) { loadChronicleForStudent(data, user) })
+    loadBehaviour(user)
   })
 }
 
@@ -505,35 +526,89 @@ function loadGPA(cycles) {
 }
 
 // ── Behaviour ─────────────────────────────────────────────────────────────────
-var COMMENDATION_CATEGORY = 'REAL Commendation'
-var NEGATIVE_CATEGORIES = [
-  'Attitude/Behaviour', 'Out of Class', 'REAL Behaviour Not Shown',
-  'Non Negotiable Behaviour', 'Detention', 'Suspension'
-]
+// Compass decorates category names with sorting symbols and stray spaces
+// ("^REAL Commendation ", "Detention ", "><REAL Behaviours - Not Shown"), so
+// categories are matched on a lowercase core phrase, never exact names.
+function categoryKind(name) {
+  var n = String(name || '').trim().toLowerCase()
+  if (n.includes('detention'))         return 'detention'
+  if (n.includes('suspension'))        return 'suspension'
+  if (n.includes('out of class'))      return 'ocwe'
+  if (n.includes('real commendation')) return 'commendation'
+  if (['attitude', 'real behaviour', 'non negotiable', 'confiscation'].some(function(p) { return n.includes(p) })) return 'negative'
+  return null
+}
 
-function loadChronicleForStudent(feed, user) {
-  var d = { detentions: 0, suspensions: 0, ocwe: 0, negPoints: 0, commendations: 0 }
+function blankBehaviour() { return { detentions: 0, suspensions: 0, ocwe: 0, negPoints: 0, commendations: 0 } }
 
-  $.each(feed.d.data || feed.d || [], function() {
-    var catName = this.category || this.categoryName || ''
-    var points  = Number(this.points) || 0
+// entries: number of Chronicle entries; points: signed points for them.
+function tallyBehaviour(d, kind, entries, points) {
+  if (!kind) return
+  if (kind === 'commendation') { if (points > 0) d.commendations += points; return }
+  if (kind === 'detention')  d.detentions  += entries
+  if (kind === 'suspension') d.suspensions += entries
+  if (kind === 'ocwe')       d.ocwe        += entries
+  if (points < 0) d.negPoints += Math.abs(points)
+}
 
-    if (catName === 'Detention') {
-      d.detentions++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === 'Suspension') {
-      d.suspensions++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === 'Out of Class') {
-      d.ocwe++
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (NEGATIVE_CATEGORIES.includes(catName)) {
-      if (points < 0) d.negPoints += Math.abs(points)
-    } else if (catName === COMMENDATION_CATEGORY) {
-      if (points > 0) d.commendations += points
-    }
+function loadBehaviour(user) {
+  getChronicleCategories().done(function(cats) {
+    var nameById = {}
+    cats.forEach(function(c) { nameById[c.id] = c.name })
+    getStudentChronicle(user, cats.map(function(c) { return c.id })).done(function(feed) {
+      try {
+        var list = (feed && feed.d && (feed.d.data || feed.d)) || []
+        if (!Array.isArray(list)) throw new Error('feed is not a list')
+        var d = blankBehaviour(), recognised = 0
+        list.forEach(function(e) {
+          var name = e.category || e.categoryName || nameById[e.categoryId]
+          if (!name) return
+          recognised++
+          tallyBehaviour(d, categoryKind(name), 1, Number(e.points) || 0)
+        })
+        // Entries came back but none had a category we can read: don't
+        // pretend that's a clean record, use the class counts instead.
+        if (list.length && !recognised) throw new Error('feed entries have no category')
+        renderBehaviour(user, d, null)
+      } catch (e) {
+        behaviourFromClass(user, e.message)
+      }
+    }).fail(function(xhr) {
+      behaviourFromClass(user, 'HTTP ' + (xhr && xhr.status))
+    })
+  }).fail(function(xhr) {
+    showLoadError(user, 'behaviour', 'Chronicle categories', xhr)
   })
+}
 
+// Fallback: counts logged against THIS class only (GetCategoryUsageCount).
+function behaviourFromClass(user, reason) {
+  if (window.console) console.warn('[Rubric Calculator] Chronicle feed failed for user ' + user + ' (' + reason + '); using this class only')
+  $.when(getChronicleCategories(), getClassChronicleUsage()).done(function(cats, usage) {
+    try {
+      var nameById = {}
+      cats.forEach(function(c) { nameById[c.id] = c.name })
+      var d = blankBehaviour()
+      usage.forEach(function(u) {
+        var kind = categoryKind(nameById[u.categoryId])
+        if (!kind || !u.counts) return
+        u.counts.forEach(function(c) {
+          if (String(c.StudentId) !== String(user)) return
+          var entries = (c.Grey || 0) + (c.Green || 0) + (c.Amber || 0) + (c.Red || 0)
+          var pts = Math.abs(Number(c.TotalPoints) || 0)
+          tallyBehaviour(d, kind, entries, kind === 'commendation' ? pts : -pts)
+        })
+      })
+      renderBehaviour(user, d, 'this class only')
+    } catch (e) {
+      showLoadError(user, 'behaviour', 'Chronicle', null, e)
+    }
+  }).fail(function(xhr) {
+    showLoadError(user, 'behaviour', 'Chronicle', xhr)
+  })
+}
+
+function renderBehaviour(user, d, scopeNote) {
   var score
   if (d.detentions >= 1 || d.suspensions >= 1) {
     score = (d.detentions >= 2 || d.suspensions >= 2 || d.negPoints >= 15) ? 1 : 2
@@ -553,54 +628,25 @@ function loadChronicleForStudent(feed, user) {
   el.empty()
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(detail.join(', ') || 'No entries'))
+  if (scopeNote) el.append($('<span>').addClass('detail-text-warning').text(scopeNote))
   recordScore(user, 'behaviour', score)
 }
 
 // ── Extra Curricular ──────────────────────────────────────────────────────────
-// Score: excursions/incursions only — 1=0, 2=1, 3=2–3, 4=4+
-// Cell: line 1 = total events | line 2 = score basis | line 3 = det/sus warning (if any)
-function isDetentionOrSuspension(name, cat) {
-  var n = (name || '').toLowerCase(), c = (cat || '').toLowerCase()
-  return n.includes('detention') || n.includes('suspension') ||
-         c.includes('detention') || c.includes('suspension')
-}
-function isExcursionOrIncursion(name, cat) {
-  var n = (name || '').toLowerCase(), c = (cat || '').toLowerCase()
-  return n.includes('excursion') || n.includes('incursion') ||
-         c.includes('excursion') || c.includes('incursion')
-}
-
-function loadEvents(events, user) {
-  var totalEvents = 0, excursionCount = 0, detSusCount = 0, excursionNames = []
-
-  var list = (events && events.d && events.d.data) ? events.d.data
-           : (events && events.d) ? events.d : []
-
-  $.each(list, function() {
-    var name = this.name || this.eventName || ''
-    var cat  = this.categoryName || this.category || ''
-    totalEvents++
-    if (isDetentionOrSuspension(name, cat)) {
-      detSusCount++
-    } else if (isExcursionOrIncursion(name, cat)) {
-      excursionCount++
-      excursionNames.push(name)
-    }
+// Events attended this year, read from the "Events" row of the attendance
+// summary already fetched for the Attendance column (proven source, June
+// 2026). The Events.svc/GetEventsByUserId endpoint used in August doesn't
+// exist (HTTP 404). Score: 1=none, 2=one, 3=two-three, 4=four+.
+function loadExtraCurricular(classes, user) {
+  var attended = 0
+  $.each((classes && classes.d) || [], function() {
+    if (String(this.sn || '').trim().toLowerCase() === 'events') attended = Number(this.ta) || 0
   })
-
-  var score = scoreFromThresholds(excursionCount, [[4, 4], [2, 3], [1, 2]])
+  var score = scoreFromThresholds(attended, [[4, 4], [2, 3], [1, 2]])
   var el = $('.dash' + user + ' .extra-curricular')
+  el.empty()
   el.append(scoreBadge(score))
-  el.append($('<span>').addClass('detail-text')
-    .text(totalEvents + ' total event' + (totalEvents !== 1 ? 's' : '')))
-  el.append($('<span>').addClass('detail-text')
-    .attr('title', excursionNames.join(', ') || 'None')
-    .text(excursionCount + ' excursion' + (excursionCount !== 1 ? 's' : '') +
-          '/incursion' + (excursionCount !== 1 ? 's' : '') + ' \u2192 score basis'))
-  if (detSusCount > 0) {
-    el.append($('<span>').addClass('detail-text-danger')
-      .text(detSusCount + ' linked to detention/suspension'))
-  }
+  el.append($('<span>').addClass('detail-text').text(attended + ' event' + (attended !== 1 ? 's' : '') + ' attended'))
   recordScore(user, 'extra-curricular', score)
 }
 
