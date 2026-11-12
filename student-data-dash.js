@@ -409,12 +409,32 @@
   // Report cycles come from Reports.svc/GetCycles, the same endpoint Reports
   // Check uses, so nobody has to look up an ID. Most recent cycle first. The
   // ID box stays as a fallback if the list can't be loaded.
+  // Most recent cycle first: by start date, then year; Compass's order otherwise.
+  function cycleRecency(c) {
+    var t = Date.parse(c.start || c.startDate || '');
+    if (!isNaN(t)) return t;
+    var y = parseInt(c.year, 10);
+    return isNaN(y) ? 0 : Date.UTC(y, 0, 1);
+  }
+
+  // Loads automatically from the most recent report cycle; the dropdown
+  // changes the cycle and reloads.
+  var cyclesReady = false, autoLoaded = false;
+  function maybeAutoLoad() {
+    var overlay = document.getElementById('lndash-overlay');
+    if (autoLoaded || !cyclesReady || !overlay || overlay.style.display !== 'flex') return;
+    autoLoaded = true;
+    runFullPull();
+  }
+
   function fillCyclePicker(savedId) {
     var pick = document.getElementById('lndash-tj-pick');
     var input = document.getElementById('lndash-tj');
-    pick.onchange = function () { if (pick.value) input.value = pick.value; };
+    pick.onchange = function () { if (pick.value) { input.value = pick.value; runFullPull(); } };
     postJson('/Services/Reports.svc/GetCycles', { page: 1, start: 0, limit: 25 }).then(function (resp) {
-      var cycles = (resp && resp.d) || [];
+      var cycles = ((resp && resp.d) || []).map(function (c, i) { return { c: c, i: i }; })
+        .sort(function (a, b) { return (cycleRecency(b.c) - cycleRecency(a.c)) || (a.i - b.i); })
+        .map(function (x) { return x.c; });
       pick.innerHTML = '';
       cycles.forEach(function (c) {
         var o = document.createElement('option');
@@ -423,9 +443,11 @@
         pick.appendChild(o);
       });
       if (!cycles.length) { pick.innerHTML = '<option value="">No cycles found</option>'; return; }
-      var match = cycles.filter(function (c) { return String(c.id) === String(savedId); })[0];
-      pick.value = match ? match.id : cycles[0].id;
+      // Always start from the most recent cycle.
+      pick.value = cycles[0].id;
       input.value = pick.value;
+      cyclesReady = true;
+      maybeAutoLoad();
     }).catch(function (e) {
       warn('GetCycles failed -- type the cycle ID instead', e);
       pick.innerHTML = '<option value="">Could not load -- type ID</option>';
@@ -496,6 +518,7 @@
     btn.addEventListener('click', function () {
       if (moved) return;
       overlay.style.display = 'flex';
+      maybeAutoLoad();
     });
   }
 
@@ -506,11 +529,14 @@
 
   // TODO(unverified) #4: no endpoint found yet that lists PAT/NAPLAN cycles, so
   // cycle IDs are typed into the overlay bar (remembered between runs).
+  var pulling = false;
   function runFullPull() {
+    if (pulling) return;
     var c = readCycleInputs();
     if (!c.tjCycleId) { setStatus('Enter the report cycle ID first.'); return; }
     if (!c.patNaplanCycleIds.length) warn('No PAT/NAPLAN cycle IDs entered -- those columns will be empty.');
 
+    pulling = true;
     setBusy(true);
     setStatus('Discovering classes...');
     discoverAllClasses(c.tjCycleId).then(function (classes) {
@@ -527,7 +553,7 @@
     }).catch(function (e) {
       err('Full pull failed:', e);
       setStatus('Error -- see console');
-    }).then(function () { setBusy(false); });
+    }).then(function () { pulling = false; setBusy(false); });
   }
 
   // Counts only -- no names or values -- so staff can see which sources worked.
@@ -659,7 +685,7 @@
   }
 
   var overlay = buildOverlay();
-  if (FROM_LAUNCHER) overlay.style.display = 'flex';
+  if (FROM_LAUNCHER) { overlay.style.display = 'flex'; maybeAutoLoad(); }
   else buildLauncher(overlay);
   log('Launcher ready.');
 
