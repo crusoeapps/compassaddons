@@ -179,6 +179,12 @@ $(`<div id="dash"><style type="text/css">
   cursor: pointer;
 }
 #dash .button:hover { background-color: #ccc; }
+#dash .event-groups { margin: 16px 0; padding: 12px 16px; background: #fff; border: 1px solid #e2e6ee; border-radius: 8px; font-size: 13px; }
+#dash .event-groups:empty { display: none; }
+#dash .event-groups h3 { margin: 0 0 8px; font-size: 14px; }
+#dash .event-groups table { width: 100%; border-collapse: collapse; box-shadow: none; }
+#dash .event-groups td, #dash .event-groups th { padding: 4px 8px; border-bottom: 1px solid #eef0f4; text-align: left; vertical-align: top; font-size: 12px; }
+#dash .ec-calendar { display: block; font-size: 11px; color: #555; margin-top: 2px; }
 #dash .note {
   padding: 1em;
   color: #666;
@@ -209,6 +215,7 @@ $(`<div id="dash"><style type="text/css">
   #dash .header .button,
   #dash .header .button-print,
   #dash .note { display: none !important; }
+  #dash .event-groups { display: none !important; }
   #dash table {
     box-shadow: none !important;
     border: 1px solid #ccc !important;
@@ -253,6 +260,8 @@ $.each(Object.keys(headers), function(i, name) {
   th.appendTo('#dash thead tr')
 })
 $('<tbody>').appendTo('#dash table')
+
+$('<div>').attr('id', 'event-groups').addClass('event-groups').appendTo('#dash')
 
 $('<div>').addClass('note')
   .html('Crusoe College &mdash; Advisory Rubric Calculator. Scores 1–4. Total /20: 19–20 Completion with Commendation &nbsp;|&nbsp; 12–18 Completion &nbsp;|&nbsp; 7–11 Participation &nbsp;|&nbsp; &lt;7 Enrolment')
@@ -444,6 +453,7 @@ function loadStudents(students) {
     var attendance = getAllAttendance(user)
     loadInto(attendance, user, 'attendance', 'attendance', function(data) { loadAllAttendance(data, user) })
     loadInto(attendance, user, 'extra-curricular', 'events', function(data) { loadExtraCurricular(data, user) })
+    loadEventGroups(user)
     var yearLevelPromise = getYearLevel(user)
     loadInto(getTasks(user), user, 'kats', 'learning tasks', function(tasks) {
       yearLevelPromise.always(function(yearLevel) {
@@ -704,7 +714,104 @@ function loadExtraCurricular(classes, user) {
   el.empty()
   el.append(scoreBadge(score))
   el.append($('<span>').addClass('detail-text').text(attended + ' event' + (attended !== 1 ? 's' : '') + ' attended'))
+  if (eventGroupLine[user]) el.append(eventGroupLine[user])
   recordScore(user, 'extra-curricular', score)
+}
+
+// ── Event groups (calendar) ───────────────────────────────────────────────────
+// Lists each student's events this year, grouped by type, so staff can see
+// what the Extra Curricular count is made of and choose which groups should
+// count. Doesn't change the score yet.
+// Request body copied from Compass's own profile page (Nov 2026).
+function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) }
+function getUserEvents(userId) {
+  var now = new Date()
+  return compassPost("/Services/Calendar.svc/GetEventsByUser", {
+    userId: userId, homePage: true, activityId: null, subjectId: null, locationId: null, staffIds: null,
+    startDate: now.getFullYear() + '-01-01', endDate: ymd(now), page: 1, start: 0, limit: 5000
+  }, { user: userId })
+}
+
+// Keyword groups from the event title. First match wins.
+var EVENT_KEYWORDS = [
+  ['Excursion', /excursion/i],
+  ['Incursion', /incursion/i],
+  ['Camp', /\bcamps?\b/i],
+  ['Sport', /sport|carnival|athletic|swimming|cross ?country|gala day|interschool|tournament|netball|football|basketball|volleyball|soccer/i],
+  ['Performance / arts', /concert|performance|production|music|drama|showcase|art show|band/i],
+  ['Assembly / ceremony', /assembly|ceremony|presentation|awards?/i],
+  ['Leadership / student voice', /leader|\bSRC\b|student voice|captain/i],
+  ['Meeting / interview', /meeting|interview|conference|parent.?teacher|student.?led/i],
+  ['Exam / testing', /exam|naplan|\bpat\b|assessment|test/i]
+]
+function eventKeywordGroup(title) {
+  for (var i = 0; i < EVENT_KEYWORDS.length; i++) if (EVENT_KEYWORDS[i][1].test(title || '')) return EVENT_KEYWORDS[i][0]
+  return 'Other'
+}
+
+var eventGroupLine = {}   // user -> rendered line in the Extra Curricular cell
+var classEventGroups = {} // "type | group" -> { students: {uid:1}, titles: {title:count} }
+
+function loadEventGroups(user) {
+  getUserEvents(user).done(function(r) {
+    try {
+      var list = r && r.d
+      if (list && !Array.isArray(list)) list = list.data || list.events || []
+      if (!Array.isArray(list)) list = []
+      var now = Date.now(), seen = {}, counts = {}, total = 0
+      list.forEach(function(e) {
+        // Skip normal timetabled lessons (activityType 1 = class) and anything not yet started.
+        if (e.activityType === 1) return
+        var start = Date.parse(e.start)
+        if (!isNaN(start) && start > now) return
+        var title = String(e.title || e.longTitleWithoutTime || e.longTitle || '').trim()
+        // A multi-day event appears once per day: count it once.
+        var key = (e.activityId != null ? e.activityId : '') + '|' + title
+        if (seen[key]) return
+        seen[key] = 1
+        var type = String(e.activityTypeName || ('Type ' + e.activityType)).trim()
+        var group = type + ' | ' + eventKeywordGroup(title)
+        counts[group] = (counts[group] || 0) + 1
+        total++
+        var cg = classEventGroups[group] || (classEventGroups[group] = { students: {}, titles: {} })
+        cg.students[user] = 1
+        if (title) cg.titles[title] = (cg.titles[title] || 0) + 1
+      })
+      var parts = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a] })
+      var line = $('<span>').addClass('ec-calendar')
+        .text('Calendar: ' + total + ' event' + (total !== 1 ? 's' : '') + (parts.length ? ' (' + parts.map(function(g) { return g.split(' | ')[1] + ' ' + counts[g] }).join(', ') + ')' : ''))
+        .attr('title', parts.map(function(g) { return g + ': ' + counts[g] }).join('\n'))
+      eventGroupLine[user] = line
+      $('.dash' + user + ' .extra-curricular').append(line)
+      renderEventGroupSummary()
+    } catch (e) {
+      if (window.console) console.error('[Rubric Calculator] calendar events not understood for user ' + user, e)
+    }
+  }).fail(function(xhr) {
+    if (window.console) console.warn('[Rubric Calculator] calendar events failed for user ' + user + ' (HTTP ' + (xhr && xhr.status) + ')')
+    eventGroupLine[user] = $('<span>').addClass('ec-calendar').text('Calendar: could not load (HTTP ' + (xhr && xhr.status) + ')')
+    $('.dash' + user + ' .extra-curricular').append(eventGroupLine[user])
+  })
+}
+
+// Class-wide list of every group found, with example event titles.
+function renderEventGroupSummary() {
+  var groups = Object.keys(classEventGroups)
+  if (!groups.length) return
+  groups.sort(function(a, b) {
+    return Object.keys(classEventGroups[b].titles).length - Object.keys(classEventGroups[a].titles).length
+  })
+  var box = $('#event-groups').empty()
+  box.append($('<h3>').text('Event groups found for this class (calendar, 1 Jan to today)'))
+  var t = $('<table>').appendTo(box)
+  t.append($('<tr>').append($('<th>').text('Compass type'), $('<th>').text('Group'), $('<th>').text('Different events'), $('<th>').text('Students'), $('<th>').text('Examples')))
+  groups.forEach(function(g) {
+    var cg = classEventGroups[g], titles = Object.keys(cg.titles).sort(function(a, b) { return cg.titles[b] - cg.titles[a] })
+    t.append($('<tr>').append(
+      $('<td>').text(g.split(' | ')[0]), $('<td>').text(g.split(' | ')[1]),
+      $('<td>').text(titles.length), $('<td>').text(Object.keys(cg.students).length),
+      $('<td>').text(titles.slice(0, 5).join('; ') + (titles.length > 5 ? '; …' : ''))))
+  })
 }
 
 // ── Kick off ──────────────────────────────────────────────────────────────────
