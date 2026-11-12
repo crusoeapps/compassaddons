@@ -5,7 +5,8 @@
 //          Compass lookup now says so in its cell instead of staying blank;
 //          KATs no longer counts pending tasks, and Total flags them;
 //          Extra Curricular counts events from attendance (Events.svc was
-//          a 404); Behaviour sends category ids, falls back to class counts
+//          a 404); Behaviour sends category ids, falls back to class counts;
+//          Extra Curricular now scores calendar events in counted groups
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
@@ -247,7 +248,7 @@ var headers = {
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation. Marked 'this class only' when Compass won't return the student's whole Chronicle.",
-  'Extra Curricular':'Events attended this year, from Compass attendance (1=none, 2=one, 3=two–three, 4=four+).',
+  'Extra Curricular':'Events this year in the counted groups: Excursion, Incursion, Camp, Sport, Performance/arts, Leadership/student voice (1=none, 2=one, 3=two–three, 4=four+). Falls back to the attendance Events count if the calendar can\'t load.',
   'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment. Flagged when a student has pending tasks, as the score may change.'
 }
 
@@ -704,24 +705,56 @@ function renderBehaviour(user, d, scopeNote, noteTitle) {
 // summary already fetched for the Attendance column (proven source, June
 // 2026). The Events.svc/GetEventsByUserId endpoint used in August doesn't
 // exist (HTTP 404). Score: 1=none, 2=one, 3=two-three, 4=four+.
+// Groups that count towards the Extra Curricular score (decided Nov 2026).
+var COUNTED_EVENT_GROUPS = ['Excursion', 'Incursion', 'Camp', 'Sport', 'Performance / arts', 'Leadership / student voice']
+
+var extraCurricular = {} // user -> { attended, attendanceReady, groups, calendarReady, calendarFailed }
+function ecState(user) { return extraCurricular[user] || (extraCurricular[user] = {}) }
+
 function loadExtraCurricular(classes, user) {
   var attended = 0
   $.each((classes && classes.d) || [], function() {
     if (String(this.sn || '').trim().toLowerCase() === 'events') attended = Number(this.ta) || 0
   })
-  var score = scoreFromThresholds(attended, [[4, 4], [2, 3], [1, 2]])
+  var st = ecState(user)
+  st.attended = attended
+  st.attendanceReady = true
+  renderExtraCurricular(user)
+}
+
+// Score from the calendar groups; if the calendar couldn't load, fall back
+// to the attendance "Events" count and say so.
+function renderExtraCurricular(user) {
+  var st = ecState(user)
   var el = $('.dash' + user + ' .extra-curricular')
-  el.empty()
-  el.append(scoreBadge(score))
-  el.append($('<span>').addClass('detail-text').text(attended + ' event' + (attended !== 1 ? 's' : '') + ' attended'))
-  if (eventGroupLine[user]) el.append(eventGroupLine[user])
+  var score
+  if (st.calendarReady) {
+    var counted = 0, countedParts = [], otherParts = []
+    Object.keys(st.groups).sort(function(a, b) { return st.groups[b] - st.groups[a] }).forEach(function(g) {
+      if (COUNTED_EVENT_GROUPS.indexOf(g) >= 0) { counted += st.groups[g]; countedParts.push(g + ' ' + st.groups[g]) }
+      else otherParts.push(g + ' ' + st.groups[g])
+    })
+    score = scoreFromThresholds(counted, [[4, 4], [2, 3], [1, 2]])
+    el.empty()
+    el.append(scoreBadge(score))
+    el.append($('<span>').addClass('detail-text').text(counted + ' counted event' + (counted !== 1 ? 's' : '') + (countedParts.length ? ' (' + countedParts.join(', ') + ')' : '')))
+    if (otherParts.length) el.append($('<span>').addClass('ec-calendar').text('Not counted: ' + otherParts.join(', ')))
+  } else if (st.calendarFailed && st.attendanceReady) {
+    score = scoreFromThresholds(st.attended, [[4, 4], [2, 3], [1, 2]])
+    el.empty()
+    el.append(scoreBadge(score))
+    el.append($('<span>').addClass('detail-text').text(st.attended + ' event' + (st.attended !== 1 ? 's' : '') + ' attended (attendance count)'))
+    el.append($('<span>').addClass('detail-text-warning').text('Calendar unavailable (' + st.calendarFailed + '): groups not checked'))
+  } else {
+    return // wait for the calendar (or for attendance, if the calendar failed)
+  }
   recordScore(user, 'extra-curricular', score)
 }
 
 // ── Event groups (calendar) ───────────────────────────────────────────────────
 // Lists each student's events this year, grouped by type, so staff can see
 // what the Extra Curricular count is made of and choose which groups should
-// count. Doesn't change the score yet.
+// count. The score counts COUNTED_EVENT_GROUPS (see renderExtraCurricular).
 // Request body copied from Compass's own profile page (Nov 2026).
 function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) }
 function getUserEvents(userId) {
@@ -749,7 +782,6 @@ function eventKeywordGroup(title) {
   return 'Other'
 }
 
-var eventGroupLine = {}   // user -> rendered line in the Extra Curricular cell
 var classEventGroups = {} // "type | group" -> { students: {uid:1}, titles: {title:count} }
 
 function loadEventGroups(user) {
@@ -777,20 +809,23 @@ function loadEventGroups(user) {
         cg.students[user] = 1
         if (title) cg.titles[title] = (cg.titles[title] || 0) + 1
       })
-      var parts = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a] })
-      var line = $('<span>').addClass('ec-calendar')
-        .text('Calendar: ' + total + ' event' + (total !== 1 ? 's' : '') + (parts.length ? ' (' + parts.map(function(g) { return g.split(' | ')[1] + ' ' + counts[g] }).join(', ') + ')' : ''))
-        .attr('title', parts.map(function(g) { return g + ': ' + counts[g] }).join('\n'))
-      eventGroupLine[user] = line
-      $('.dash' + user + ' .extra-curricular').append(line)
+      // Totals by keyword group (Compass type is shown in the class summary).
+      var byGroup = {}
+      Object.keys(counts).forEach(function(g) { var k = g.split(' | ')[1]; byGroup[k] = (byGroup[k] || 0) + counts[g] })
+      var st = ecState(user)
+      st.groups = byGroup
+      st.calendarReady = true
+      renderExtraCurricular(user)
       renderEventGroupSummary()
     } catch (e) {
       if (window.console) console.error('[Rubric Calculator] calendar events not understood for user ' + user, e)
+      ecState(user).calendarFailed = 'unexpected data'
+      renderExtraCurricular(user)
     }
   }).fail(function(xhr) {
     if (window.console) console.warn('[Rubric Calculator] calendar events failed for user ' + user + ' (HTTP ' + (xhr && xhr.status) + ')')
-    eventGroupLine[user] = $('<span>').addClass('ec-calendar').text('Calendar: could not load (HTTP ' + (xhr && xhr.status) + ')')
-    $('.dash' + user + ' .extra-curricular').append(eventGroupLine[user])
+    ecState(user).calendarFailed = 'HTTP ' + (xhr && xhr.status)
+    renderExtraCurricular(user)
   })
 }
 
@@ -804,11 +839,12 @@ function renderEventGroupSummary() {
   var box = $('#event-groups').empty()
   box.append($('<h3>').text('Event groups found for this class (calendar, 1 Jan to today)'))
   var t = $('<table>').appendTo(box)
-  t.append($('<tr>').append($('<th>').text('Compass type'), $('<th>').text('Group'), $('<th>').text('Different events'), $('<th>').text('Students'), $('<th>').text('Examples')))
+  t.append($('<tr>').append($('<th>').text('Compass type'), $('<th>').text('Group'), $('<th>').text('Counts?'), $('<th>').text('Different events'), $('<th>').text('Students'), $('<th>').text('Examples')))
   groups.forEach(function(g) {
     var cg = classEventGroups[g], titles = Object.keys(cg.titles).sort(function(a, b) { return cg.titles[b] - cg.titles[a] })
     t.append($('<tr>').append(
       $('<td>').text(g.split(' | ')[0]), $('<td>').text(g.split(' | ')[1]),
+      $('<td>').text(COUNTED_EVENT_GROUPS.indexOf(g.split(' | ')[1]) >= 0 ? 'Yes' : 'No'),
       $('<td>').text(titles.length), $('<td>').text(Object.keys(cg.students).length),
       $('<td>').text(titles.slice(0, 5).join('; ') + (titles.length > 5 ? '; …' : ''))))
   })
