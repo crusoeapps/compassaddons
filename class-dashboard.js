@@ -6,7 +6,8 @@
 //          KATs no longer counts pending tasks, and Total flags them;
 //          Extra Curricular counts events from attendance (Events.svc was
 //          a 404); Behaviour sends category ids, falls back to class counts;
-//          Extra Curricular now scores calendar events in counted groups
+//          Extra Curricular now scores calendar events in counted groups,
+//          never counting Compass activity type 10
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
@@ -707,6 +708,9 @@ function renderBehaviour(user, d, scopeNote, noteTitle) {
 // exist (HTTP 404). Score: 1=none, 2=one, 3=two-three, 4=four+.
 // Groups that count towards the Extra Curricular score (decided Nov 2026).
 var COUNTED_EVENT_GROUPS = ['Excursion', 'Incursion', 'Camp', 'Sport', 'Performance / arts', 'Leadership / student voice']
+// Compass activity types never counted, whatever the title says (Nov 2026: type 10).
+var EXCLUDED_ACTIVITY_TYPES = [10]
+var excludedTypeLabels = {} // Compass type label -> true, for the class summary
 
 var extraCurricular = {} // user -> { attended, attendanceReady, groups, calendarReady, calendarFailed }
 function ecState(user) { return extraCurricular[user] || (extraCurricular[user] = {}) }
@@ -802,7 +806,10 @@ function loadEventGroups(user) {
         if (seen[key]) return
         seen[key] = 1
         var type = String(e.activityTypeName || ('Type ' + e.activityType)).trim()
-        var group = type + ' | ' + eventKeywordGroup(title)
+        var excluded = EXCLUDED_ACTIVITY_TYPES.indexOf(Number(e.activityType)) >= 0
+        if (excluded) excludedTypeLabels[type] = true
+        // Excluded types get their own group so they never reach the count.
+        var group = type + ' | ' + (excluded ? 'Type ' + e.activityType + ' (excluded)' : eventKeywordGroup(title))
         counts[group] = (counts[group] || 0) + 1
         total++
         var cg = classEventGroups[group] || (classEventGroups[group] = { students: {}, titles: {} })
@@ -844,7 +851,7 @@ function renderEventGroupSummary() {
     var cg = classEventGroups[g], titles = Object.keys(cg.titles).sort(function(a, b) { return cg.titles[b] - cg.titles[a] })
     t.append($('<tr>').append(
       $('<td>').text(g.split(' | ')[0]), $('<td>').text(g.split(' | ')[1]),
-      $('<td>').text(COUNTED_EVENT_GROUPS.indexOf(g.split(' | ')[1]) >= 0 ? 'Yes' : 'No'),
+      $('<td>').text(!excludedTypeLabels[g.split(' | ')[0]] && COUNTED_EVENT_GROUPS.indexOf(g.split(' | ')[1]) >= 0 ? 'Yes' : 'No'),
       $('<td>').text(titles.length), $('<td>').text(Object.keys(cg.students).length),
       $('<td>').text(titles.slice(0, 5).join('; ') + (titles.length > 5 ? '; …' : ''))))
   })
