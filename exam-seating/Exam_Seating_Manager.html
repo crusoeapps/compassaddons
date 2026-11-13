@@ -2293,6 +2293,8 @@ var PRINT_COLS = {
   status: ['Status', function (s, st) { return esc(statusLabel(st.status)); }],
   location: ['Location', function (s, st) { return locText(s, st); }],
   room: ['Room', function (s, st) { return esc(st.roomId ? roomName(s, st.roomId) : '—'); }],
+  row: ['Row', function (s, st) { var r = s.rooms.find(function (x) { return x.id === st.roomId; }); return st.row && r ? '<b>' + esc(rowLabel(r, st.row)) + '</b>' : ''; }],
+  seat: ['Seat', function (s, st) { var r = s.rooms.find(function (x) { return x.id === st.roomId; }); return st.seat && r ? '<b>' + esc(seatLabel(r, st.seat)) + '</b>' : ''; }],
   arrangements: ['Arrangements', function (s, st) { return esc(st.arrangements || ''); }],
   notes: ['Notes', function (s, st) { return esc(st.notes || ''); }]
 };
