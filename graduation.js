@@ -100,7 +100,7 @@ $(document).ready(function() {
         #dash * {
           background: white;
         }
-        body form, .header, h2, h3, #progress {
+        body form, .header, h2, h3, #progress, .skipped {
           display: none;
         }
         .student {
@@ -200,13 +200,28 @@ $(document).ready(function() {
       type: 'POST'})
   }
 
+  // Every advisory class in the cycle whose code looks like 10ADVA / 9ADVE,
+  // whichever subject it sits under (was: only subject "AV102 Advisory").
+  var ADV_CLASS = /^\d{1,2}\s*ADV/i
   function loadSubjects(subjects, cycleId) {
-    try {
-      let subjectId = subjects.d.filter(s => s.text == "AV102 Advisory")[0].value
-      getClasses(subjectId).done((classes) => loadClasses(classes, cycleId))
-    } catch {
-      $(`#c${cycleId}`).addClass('note').text("AV102 Advisory - subject not found.")
-    }
+    let list = (subjects && subjects.d) || []
+    // Look in advisory-looking subjects first; if none, check every subject.
+    let candidates = list.filter(s => /advis|ADV/i.test(s.text || ''))
+    if (!candidates.length) candidates = list
+    let found = {}
+    let requests = candidates.map(s => getClasses(s.value).then(function(r) {
+      ((r && r.d && r.d.data) || []).forEach(c => { if (ADV_CLASS.test(c.name || '')) found[c.id] = c })
+    }, function() { return $.Deferred().resolve() })) // one failed subject shouldn't stop the rest
+    $.when.apply($, requests).always(function() {
+      let classes = Object.values(found).sort((a, b) =>
+        (parseInt(a.name) - parseInt(b.name)) || a.name.localeCompare(b.name))
+      if (!classes.length) {
+        $(`#c${cycleId}`).addClass('note').text('No advisory classes (e.g. 10ADVA) found in this cycle.')
+        return
+      }
+      $('<p>').addClass('note skipped').hide().appendTo(`#c${cycleId}.cycle`)
+      loadClasses({ d: { data: classes } }, cycleId)
+    })
   }
 
   function getClasses(subjectId) {
@@ -220,8 +235,9 @@ $(document).ready(function() {
   function loadClasses(classes, cycleId) {
     $.each(classes.d.data, function() {
       let group = this.name
-      $('<h3>').text(group).appendTo(`#c${cycleId}.cycle`)
-      $('<div>').addClass(`g${group} group`).appendTo(`#c${cycleId}.cycle`)
+      // Hidden until the class turns out to have the rubric task.
+      $('<h3>').addClass(`h${group}`).text(group).hide().appendTo(`#c${cycleId}.cycle`)
+      $('<div>').addClass(`g${group} group`).hide().appendTo(`#c${cycleId}.cycle`)
       let activityId = this.id
       $.when(getTasks(activityId), getEnrolments(activityId))
       .done(function(tasks, enrolments) {
@@ -251,10 +267,13 @@ $(document).ready(function() {
     // A class without the rubric task used to throw here and leave its section
     // blank with no explanation.
     if (!task) {
-      $('<p>').addClass('note group-note').text('No "Year 10 Graduation Rubric" learning task in this class.')
-        .appendTo(`#c${cycleId}.cycle .g${group}.group`)
+      // Classes without the rubric (e.g. other year levels) are listed in one line.
+      let skipped = $(`#c${cycleId}.cycle .skipped`)
+      let names = (skipped.data('names') || []).concat(group).sort()
+      skipped.data('names', names).text('No "Year 10 Graduation Rubric" task, not shown: ' + names.join(', ')).show()
       return
     }
+    $(`#c${cycleId}.cycle .h${group}, #c${cycleId}.cycle .g${group}.group`).show()
     let year = new Date(task.createdTimestamp).getUTCFullYear()
     let date = `November ${year}`
     let students = task.students.filter(s => classlist.includes(s.userId))
