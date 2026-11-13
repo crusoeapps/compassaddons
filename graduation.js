@@ -156,7 +156,7 @@ $(document).ready(function() {
   $('<div>')
     .addClass('cycle')
     .addClass('note')
-    .html('<p>Create graduation certificates based on the Year 10 Graduation Rubric.</p><p>👨🏻‍💻 Email Andrew Kerr for support</p>')
+    .html('<p>Create graduation certificates based on the Year 10 Graduation Rubric.</p>')
     .appendTo('#dash')
   
   // get the report cycles to populate dropdown list
@@ -256,7 +256,7 @@ $(document).ready(function() {
       return
     }
     let year = new Date(task.createdTimestamp).getUTCFullYear()
-    let date = `December ${year}`
+    let date = `November ${year}`
     let students = task.students.filter(s => classlist.includes(s.userId))
     $.each(students, function() {
       let userId = this.userId
