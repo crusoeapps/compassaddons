@@ -98,11 +98,36 @@ function printHeader(title, room) {
     extra.map(function (x) { return '<div class="sub" style="font-size:9pt;color:#1a2540">' + x + '</div>'; }).join('');
 }
 
+/* Shrink a name's font so it fits its grid box. Width is measured with the
+   print font on a canvas; names that already fit keep the normal size (so
+   default output is unchanged). Returns '' or an inline style. */
+var _fitCanvas = null;
+function fitStyle(text, basePt, availPt, bold, upper) {
+  if (!text) return '';
+  try {
+    _fitCanvas = _fitCanvas || document.createElement('canvas');
+    var g = _fitCanvas.getContext('2d');
+    g.font = (bold ? '700 ' : '400 ') + '100px "DM Sans", Arial, sans-serif';
+    var em = g.measureText(upper ? String(text).toUpperCase() : String(text)).width / 100;
+    var fit = availPt / em * 0.92;                       // small safety margin
+    if (fit >= basePt) return '';
+    return ' style="font-size:' + Math.max(2.5, Math.floor(fit * 10) / 10) + 'pt"';
+  } catch (e) { return ''; }
+}
+/* Usable width of one seat box on the printed grid, in points. */
+function gridCellPt(r, portrait) {
+  var pageMm = portrait ? 210 : 297;
+  var cellMm = (pageMm - 12 - 16 - 9) / r.rows - 1.1;   // page margins, body padding, Seat column, cell padding
+  return cellMm * 72 / 25.4;
+}
+
 function printRoomSheet(roomId) {
   var s = session();
   var r = s.rooms.find(function (x) { return x.id === roomId; });
   var grid = {};
   s.students.forEach(function (st) { if (st.roomId === roomId && st.row) grid[st.row + '_' + st.seat] = st; });
+  var portrait = cfg().print.gridOrientation === 'portrait';
+  var avail = gridCellPt(r, portrait);
   var t = '<table><thead><tr><th class="rowhead"></th>';
   for (var row = 1; row <= r.rows; row++) t += '<th>Row ' + esc(rowLabel(r, row)) + '</th>';
   t += '</tr></thead><tbody>';
@@ -112,12 +137,13 @@ function printRoomSheet(roomId) {
       var blk = seatBlocked(r, row2, seat);
       if (blk) { t += '<td style="background:#e4e4e4"></td>'; continue; }
       var st = grid[row2 + '_' + seat];
-      t += '<td>' + (st ? '<span class="f">' + esc(st.first) + '</span><span class="l">' + esc(st.last) + '</span>' : '') + '</td>';
+      t += '<td>' + (st ? '<span class="f"' + fitStyle(st.first, 6, avail, false, false) + '>' + esc(st.first) + '</span>' +
+                          '<span class="l"' + fitStyle(st.last, 6.8, avail, true, true) + '>' + esc(st.last) + '</span>' : '') + '</td>';
     }
     t += '</tr>';
   }
   t += '</tbody></table>';
-  printHTML(r.name + ' seat grid', printHeader(r.name + ' Supervisor Sheet', r) + t, cfg().print.gridOrientation === 'portrait');
+  printHTML(r.name + ' seat grid', printHeader(r.name + ' Supervisor Sheet', r) + t, portrait);
 }
 
 /* Print columns, chosen in Settings → Print. */

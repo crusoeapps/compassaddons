@@ -407,6 +407,9 @@ with sync_playwright() as p:
     h = grab_print(q, "printMasterList()")
     check("separate First name and Last name columns", "<th>First name</th><th>Last name</th>" in h)
     check("separate bold Row and Seat columns, no Status", "<th>Row</th><th>Seat</th>" in h and "<td><b>1</b></td>" in h and "<th>Status</th>" not in h)
+    h = grab_print(q, "(function(){ var st = session().students.filter(function(x){return x.row;})[0]; st.last = 'BONNICI-PETTERSEN-WILLIAMSON'; printRoomSheet(session().rooms[0].id); })()")
+    check("long surnames shrink to fit their grid box; short ones keep normal size",
+          re.search(r'<span class="l" style="font-size:[0-9.]+pt">BONNICI-PETTERSEN-WILLIAMSON', h) is not None and h.count('class="l" style=') == 1)
     q.click("nav button[data-tab='sessions']"); q.wait_for_timeout(300)
     q.locator(".session-card").first.locator("button:has-text('Edit')").click(); q.wait_for_timeout(200)
     q.fill("#f_start", "09:00"); q.fill("#f_finish", "10:30")
