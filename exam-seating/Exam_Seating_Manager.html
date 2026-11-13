@@ -1,0 +1,2492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Crusoe College — Exam Seating Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --navy: #0d5c2e; --blue: #177a3d; --accent: #c8a020; --green: #1a5c22;
+    --red: #b83232; --purple: #5a3a8a; --light: #f4f6fb; --border: #dce3f0;
+    --text: #1a2540; --muted: #6b7a99;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--light); color: var(--text); min-height: 100vh; }
+  button { font-family: 'DM Sans', sans-serif; cursor: pointer; }
+  input, select, textarea { font-family: 'DM Sans', sans-serif; font-size: 0.88rem; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; color: var(--text); background: white; }
+  input:focus, select:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; display: block; margin-bottom: 4px; }
+
+  header { background: linear-gradient(135deg, #0a4a24 0%, #0d5c2e 60%, #177a3d 100%); color: white; padding: 14px 28px 0; }
+  .header-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .header-title h1 { font-family: 'DM Serif Display', serif; font-size: 1.45rem; }
+  .header-title p { font-size: 0.76rem; opacity: 0.65; margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .session-badge { background: var(--accent); color: #1a1a00; font-weight: 700; font-size: 0.82rem; padding: 5px 14px; border-radius: 20px; }
+  .sync-pill { font-size: 0.72rem; font-weight: 600; padding: 5px 12px; border-radius: 20px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); display: flex; align-items: center; gap: 6px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #9aa; }
+  .sync-pill.ok .sync-dot { background: #5be07f; }
+  .sync-pill.saving .sync-dot { background: var(--accent); animation: pulse 1s infinite; }
+  .sync-pill.err .sync-dot { background: #ff7070; }
+  .sync-pill.local .sync-dot { background: #8fb7ff; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  .hbtn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 8px; padding: 7px 14px; font-size: 0.78rem; font-weight: 500; transition: background 0.2s; }
+  .hbtn:hover { background: rgba(255,255,255,0.28); }
+  .hbtn.gold { background: var(--accent); color: #1a1a00; border-color: transparent; font-weight: 700; }
+  .hbtn.gold:hover { background: #dab332; }
+
+  nav { display: flex; gap: 2px; margin-top: 14px; flex-wrap: wrap; }
+  nav button { border: none; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.65); font-size: 0.82rem; font-weight: 500; padding: 10px 18px; border-radius: 8px 8px 0 0; transition: all 0.2s; }
+  nav button:hover { background: rgba(255,255,255,0.15); color: white; }
+  nav button.active { background: var(--light); color: var(--navy); font-weight: 700; }
+  nav button.editor-only { display: none; }
+  body.is-editor nav button.editor-only { display: block; }
+
+  main { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
+
+  .section-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
+  .section-head h2 { font-family: 'DM Serif Display', serif; font-size: 1.35rem; color: var(--navy); }
+  .section-head p { font-size: 0.8rem; color: var(--muted); margin-top: 2px; max-width: 680px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn { background: var(--navy); color: white; border: none; border-radius: 8px; padding: 9px 16px; font-size: 0.82rem; font-weight: 600; transition: background 0.2s, transform 0.1s; }
+  .btn:hover { background: var(--blue); }
+  .btn:active { transform: scale(0.97); }
+  .btn.secondary { background: white; color: var(--navy); border: 1.5px solid var(--border); }
+  .btn.secondary:hover { border-color: var(--blue); background: #f0f7f2; }
+  .btn.danger { background: var(--red); }
+  .btn.danger:hover { background: #d44; }
+  .btn.gold { background: var(--accent); color: #1a1a00; }
+  .btn.gold:hover { background: #dab332; }
+  .btn.small { padding: 5px 10px; font-size: 0.72rem; }
+  .pill { font-size: 0.68rem; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .pill.completing { background: #e6f4ec; color: var(--green); }
+  .pill.special { background: #ede8f7; color: var(--purple); }
+  .pill.withdrawn, .pill.exemption { background: #fce8e8; color: var(--red); }
+  .muted { color: var(--muted); font-size: 0.8rem; }
+  .empty-msg { text-align: center; color: var(--muted); padding: 44px 20px; font-size: 0.9rem; background: white; border: 2px dashed var(--border); border-radius: 12px; }
+  .view-note { background: #fdf6e0; border: 1px solid #ecd9a0; color: #7a5c00; border-radius: 10px; padding: 10px 16px; font-size: 0.8rem; margin-bottom: 16px; display: none; }
+  body:not(.is-editor) .view-note { display: block; }
+  body:not(.is-editor) .editor-only { display: none !important; }
+
+  .session-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .session-card { background: white; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); border-top: 4px solid var(--border); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+  .session-card:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(15,31,61,0.13); }
+  .session-card.active { border-top-color: var(--accent); }
+  .session-card h3 { font-family: 'DM Serif Display', serif; font-size: 1.15rem; color: var(--navy); }
+  .session-card .sc-sub { font-size: 0.78rem; color: var(--muted); margin: 3px 0 12px; }
+  .session-card .sc-stats { display: flex; gap: 14px; font-size: 0.78rem; margin-bottom: 12px; }
+  .session-card .sc-stats b { font-size: 1.05rem; color: var(--blue); display: block; font-family: 'DM Serif Display', serif; }
+  .session-card .sc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .table-wrap { background: white; border-radius: 12px; overflow: auto; box-shadow: 0 2px 10px rgba(15,31,61,0.07); max-height: 65vh; }
+  table.data { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+  table.data th { background: var(--navy); color: white; padding: 9px 12px; text-align: left; font-weight: 600; position: sticky; top: 0; z-index: 2; white-space: nowrap; }
+  table.data td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+  table.data tr:hover td { background: #f0f4ff; }
+  table.data .t-last { font-weight: 700; text-transform: uppercase; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .filter-bar input[type=text] { min-width: 220px; }
+
+  .room-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .room-card { background: white; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); border-left: 5px solid var(--blue); }
+  .room-card.special { border-left-color: var(--purple); }
+  .room-card.withdrawn { border-left-color: var(--red); }
+  .room-card h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; color: var(--navy); }
+  .room-card .rc-sub { font-size: 0.76rem; color: var(--muted); margin: 3px 0 10px; }
+  .room-card .rc-actions { display: flex; gap: 6px; }
+
+  .seating-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: white; border-radius: 12px; padding: 12px 16px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); margin-bottom: 16px; }
+  .tb-divider { width: 1px; height: 26px; background: var(--border); margin: 0 4px; }
+  .room-banner { display: flex; align-items: center; gap: 12px; margin: 20px 0 10px; padding: 11px 16px; border-radius: 10px; color: white; background: linear-gradient(90deg, #0d5c2e, #177a3d); }
+  .room-banner.special { background: linear-gradient(90deg, #5a3a8a, #7b52b5); }
+  .room-banner.withdrawn { background: linear-gradient(90deg, #b83232, #d44444); }
+  .room-banner h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; }
+  .room-banner span { font-size: 0.76rem; opacity: 0.85; margin-left: auto; }
+  .seat-grid-wrap { overflow-x: auto; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+  .seat-table { border-collapse: separate; border-spacing: 4px; }
+  .seat-table th { font-size: 0.64rem; color: var(--muted); font-weight: 600; padding: 2px 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .seat-cell { width: 96px; min-width: 96px; height: 46px; border: 1.5px solid var(--border); border-radius: 7px; background: #fafbff; padding: 3px 6px; vertical-align: top; font-size: 0.66rem; position: relative; }
+  .seat-cell .sc-first { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat-cell .sc-lastn { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; color: var(--text); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body.is-editor .seat-cell { cursor: pointer; }
+  body.is-editor .seat-cell:hover { border-color: var(--blue); background: #eef7f1; }
+  .seat-cell.selected { border-color: var(--accent) !important; background: #fdf3d8 !important; box-shadow: 0 0 0 2px var(--accent); }
+  .seat-cell.conflict { border-color: var(--red); background: #fce8e8; }
+  .seat-cell.conflict::after { content: '!'; position: absolute; top: 0; right: 4px; color: var(--red); font-weight: 700; font-size: 0.7rem; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 7px; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+  .chip { border: 1.5px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.78rem; background: #fafbff; }
+  .chip b { text-transform: uppercase; }
+  .unseated-panel { background: #fdf6e0; border: 1.5px solid #ecd9a0; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
+  .unseated-panel h4 { font-size: 0.82rem; color: #7a5c00; margin-bottom: 8px; }
+  .unseated-panel .chip { cursor: pointer; }
+  .unseated-panel .chip:hover, .unseated-panel .chip.selected { border-color: var(--accent); background: #fdf3d8; }
+  .ka-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+
+  .lookup-box { max-width: 540px; margin: 0 auto; }
+  .lookup-input-wrap { position: relative; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(15,31,61,0.12); overflow: hidden; }
+  .lookup-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 1.1rem; pointer-events: none; }
+  .search-input { width: 100%; padding: 17px 18px 17px 50px; border: none; font-size: 1rem; background: transparent; border-radius: 0; }
+  .search-results { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .result-card { background: white; border-radius: 12px; padding: 15px 20px; box-shadow: 0 2px 12px rgba(15,31,61,0.08); border-left: 4px solid var(--blue); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .result-card.withdrawn { border-left-color: var(--red); }
+  .result-card.special { border-left-color: var(--purple); }
+  .result-name { font-family: 'DM Serif Display', serif; font-size: 1.08rem; color: var(--navy); text-transform: uppercase; }
+  .result-first { font-size: 0.78rem; color: var(--muted); }
+  .result-details { font-size: 0.79rem; color: var(--muted); margin-top: 3px; }
+
+  .print-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .print-card { background: white; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); }
+  .print-card h3 { font-family: 'DM Serif Display', serif; font-size: 1.05rem; color: var(--navy); margin-bottom: 4px; }
+  .print-card p { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+
+  .help-item { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); margin-bottom: 10px; overflow: hidden; }
+  .help-item > button { width: 100%; text-align: left; background: none; border: none; padding: 15px 20px; font-size: 0.95rem; font-weight: 700; color: var(--navy); display: flex; justify-content: space-between; align-items: center; }
+  .help-item > button:hover { background: #f5f8f6; }
+  .help-body { display: none; padding: 0 20px 18px; font-size: 0.86rem; line-height: 1.65; }
+  .help-item.open .help-body { display: block; }
+  .help-body ol { margin: 8px 0 8px 22px; }
+  .help-body li { margin-bottom: 5px; }
+  .help-body .tip { background: #e6f4ec; border-left: 4px solid var(--green); padding: 8px 12px; border-radius: 6px; margin-top: 8px; font-size: 0.8rem; }
+
+  .modal-back { display: none; position: fixed; inset: 0; background: rgba(10,25,15,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 6vh 16px; overflow: auto; }
+  .modal-back.open { display: flex; }
+  .modal { background: white; border-radius: 14px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: fadeIn 0.18s ease; }
+  .modal.wide { max-width: 760px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .modal-head { padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h3 { font-family: 'DM Serif Display', serif; color: var(--navy); font-size: 1.15rem; }
+  .modal-head button { background: none; border: none; font-size: 1.3rem; color: var(--muted); }
+  .modal-body { padding: 18px 22px; }
+  .modal-foot { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .form-row { margin-bottom: 14px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row input, .form-row select { width: 100%; }
+
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--navy); color: white; padding: 11px 22px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.3); opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 200; max-width: 90vw; text-align: center; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--red); }
+
+  @media (max-width: 720px) {
+    header { padding: 12px 14px 0; }
+    main { padding: 16px 14px 60px; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ---- customisation (Settings tab, room editor, blocked seats) ---- */
+  .header-brand { display: flex; align-items: center; gap: 12px; }
+  .header-brand img { height: 40px; max-width: 150px; object-fit: contain; background: white; border-radius: 6px; padding: 3px; }
+  textarea { width: 100%; resize: vertical; }
+  .t-extra { font-size: 0.72rem; color: var(--purple); margin-top: 2px; }
+  .rc-order { margin-left: auto; display: flex; gap: 4px; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .seat-cell.blocked { background: repeating-linear-gradient(45deg, #eef0f4, #eef0f4 5px, #e2e6ee 5px, #e2e6ee 10px); border-style: dashed; cursor: default !important; }
+  .seat-cell.blocked.aisle { background: transparent; border-color: transparent; }
+  .mask-wrap { overflow: auto; max-height: 320px; margin-top: 6px; }
+  .mask { border-collapse: separate; border-spacing: 2px; }
+  .mask th { font-size: 0.6rem; color: var(--muted); font-weight: 600; white-space: nowrap; cursor: pointer; padding: 0 3px; }
+  .mask th:hover { color: var(--navy); }
+  .mask td.m { width: 16px; min-width: 16px; height: 14px; border: 1px solid var(--border); border-radius: 3px; background: #fafbff; cursor: pointer; }
+  .mask td.m:hover { border-color: var(--blue); }
+  .mask td.m.aisle, .m-key.aisle { background: #fff; border: 1px dashed #c3c9d6; }
+  .mask td.m.unusable, .m-key.unusable { background: #8a93a6; border-color: #8a93a6; }
+  .m-key { display: inline-block; width: 12px; height: 10px; border-radius: 2px; vertical-align: middle; margin-left: 6px; }
+  .set-card { background: white; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 10px rgba(15,31,61,0.07); margin-bottom: 16px; }
+  .set-card h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; color: var(--navy); margin-bottom: 6px; }
+  .set-card > p.muted { margin-bottom: 12px; }
+  .set-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .set-table th { text-align: left; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 6px; }
+  .set-table td { padding: 4px 6px; vertical-align: middle; }
+  .set-table input[type=text], .set-table select { width: 100%; }
+  .set-table input[type=color], .set-card input[type=color] { width: 46px; height: 34px; padding: 2px; }
+  .set-actions { white-space: nowrap; text-align: right; }
+  .set-actions .btn { margin-left: 3px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  label.check { text-transform: none; letter-spacing: 0; font-size: 0.85rem; color: var(--text); font-weight: 400; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  label.check input { padding: 0; width: auto; margin: 0; }
+  .logo-preview { height: 40px; vertical-align: middle; border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
+  .settings-bar { position: sticky; bottom: 0; display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding: 12px 16px; margin: 0 -16px; background: var(--light); border-top: 1px solid var(--border); box-shadow: 0 -4px 12px rgba(15,31,61,0.06); }
+  .settings-bar > .muted { margin-right: auto; visibility: hidden; }
+  .settings-bar.dirty > .muted { visibility: visible; color: var(--accent); font-weight: 700; }
+  .warn-box { background: #fdf3d8; border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem; }
+  .ka-reason { font-size: 0.76rem; font-style: italic; }
+  @media (max-width: 640px) { .set-table thead { display: none; } .set-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-bottom: 1px solid var(--border); padding: 6px 0; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="header-brand">
+      <img id="brandLogo" alt="" style="display:none">
+      <div class="header-title">
+        <h1>Exam Seating Manager</h1>
+        <p id="brandSub">Crusoe College &middot; Shared seating &amp; supervision plans</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="session-badge" id="sessionBadge">No session</span>
+      <span class="sync-pill local" id="syncPill"><span class="sync-dot"></span><span id="syncText">Local</span></span>
+      <button class="hbtn gold" id="editorBtn" onclick="toggleEditor()">Editor sign in</button>
+    </div>
+  </div>
+  <nav id="mainNav">
+    <button data-tab="sessions" class="active" onclick="go('sessions')">Exam Sessions</button>
+    <button data-tab="students" onclick="go('students')">Students</button>
+    <button data-tab="rooms" class="editor-only" onclick="go('rooms')">Rooms &amp; Layout</button>
+    <button data-tab="seating" onclick="go('seating')">Seating Plan</button>
+    <button data-tab="lookup" onclick="go('lookup')">Lookup</button>
+    <button data-tab="print" onclick="go('print')">Print</button>
+    <button data-tab="help" onclick="go('help')">How-to Guides</button>
+    <button data-tab="settings" class="editor-only" onclick="go('settings')">Settings</button>
+  </nav>
+</header>
+
+<main id="main"></main>
+
+<div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
+    <div class="modal-head"><h3 id="modalTitle"></h3><button onclick="closeModal()">&#10005;</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+
+<script>
+'use strict';
+/* ================================================================
+   CONFIG — the only section a maintainer ever edits.
+   API_URL: paste the Google Apps Script web-app URL here after
+   completing SETUP_GUIDE.md. Leave it blank to run in local mode
+   (data stays in this browser only — good for testing).
+   PRIVACY: never set API_URL in a copy hosted on a PUBLIC website
+   (such as the compassaddons GitHub Pages site). Reading from the
+   backend needs no password, so anyone who opens that page could
+   read every student's name. Host a shared-mode copy privately.
+   ================================================================ */
+var CONFIG = {
+  API_URL: '',
+  LOCAL_EDITOR_PASSWORD: 'crusoe2026',
+  STORAGE_KEY: 'crusoe_exam_seating_v1'
+};
+
+/* ============================ STATE ============================ */
+var DB = null;
+var editor = false;
+var editorPassword = '';
+var activeTab = 'sessions';
+var saveTimer = null;
+var selectedSeat = null;
+var seatingRoomFilter = 'all';
+var studentFilter = { q: '', status: 'all' };
+var importRows = null;
+var settingsDraft = null;   // working copy while the Settings tab is open
+
+var backendHasSettings = true;   // false when the Apps Script backend predates the Settings tab
+
+/* ====================== DEFAULT SETTINGS ======================
+   Everything a coordinator can change on the Settings tab. These
+   defaults reproduce the app's original behaviour exactly, so data
+   saved before settings existed looks and seats the same.
+   Status ids for the four built-in statuses are the original
+   strings ('Completing' etc.) so existing student rows need no
+   rewriting; renaming a status only changes its label.
+   ================================================================ */
+var DEFAULT_ACCENT = '#0d5c2e';
+var DEFAULT_CONFIG = {
+  school: { name: 'Crusoe College', tagline: 'Shared seating & supervision plans', accent: DEFAULT_ACCENT, logo: '' },
+  purposes: [
+    { id: 'main', label: 'Main exam room', layout: 'seated', printTitle: '' },
+    { id: 'special', label: 'Special provisions', layout: 'list', printTitle: 'Special Exam Arrangements',
+      printCard: 'Special exam arrangements', printDesc: 'All special-provision students and where they sit.', printBtn: 'Print arrangements' },
+    { id: 'withdrawn', label: 'Withdrawn / exemptions', layout: 'list', printTitle: 'Withdrawals and Exemptions',
+      printCard: 'Withdrawals & exemptions', printDesc: 'Students not completing this exam, for the front office.', printBtn: 'Print list' }
+  ],
+  statuses: [
+    { id: 'Completing', label: 'Completing', purpose: 'main', color: '#1a5c22', keywords: '' },
+    { id: 'Special Provision', label: 'Special Provision', purpose: 'special', color: '#5a3a8a', keywords: 'special' },
+    { id: 'Withdrawn', label: 'Withdrawn', purpose: 'withdrawn', color: '#b83232', keywords: 'withdraw' },
+    { id: 'Exemption', label: 'Exemption', purpose: 'withdrawn', color: '#b83232', keywords: 'exempt' }
+  ],
+  seating: { sortBy: 'surname', pattern: 'all', rowDir: 'front', seatDir: 'ltr', near: 'cross' },
+  print: { gridOrientation: 'landscape', listOrientation: 'portrait',
+           masterCols: ['student', 'klass', 'status', 'location'], listCols: ['student', 'klass', 'status', 'room'],
+           showSupervisor: true, showTimes: true, instructions: '' }
+};
+var DEFAULT_ROOM_LAYOUT = { rowLabels: 'number', rowFrom: 'start', seatLabels: 'number', seatFrom: 'start', blocked: {}, supervisor: '', footer: '' };
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function isPlainObj(o) { return o && typeof o === 'object' && !Array.isArray(o); }
+/* Fill any key missing from target with a copy of the default. Never overwrites. */
+function fillDefaults(target, defaults) {
+  Object.keys(defaults).forEach(function (k) {
+    if (target[k] === undefined || target[k] === null) target[k] = clone(defaults[k]);
+    else if (isPlainObj(target[k]) && isPlainObj(defaults[k])) fillDefaults(target[k], defaults[k]);
+  });
+  return target;
+}
+function isHex(c) { return /^#[0-9a-f]{6}$/i.test(String(c || '')); }
+function safeJSON(str, fallback) { if (!str) return fallback; try { return JSON.parse(str); } catch (e) { return fallback; } }
+
+/* ---- settings lookups ---- */
+function cfg() { return DB.config; }
+function statusList() { return cfg().statuses; }
+function statusById(id) { return statusList().find(function (x) { return x.id === id; }) || null; }
+function statusLabel(id) { var x = statusById(id); return x ? x.label : String(id || ''); }
+function defaultStatusId() { return statusList()[0].id; }
+function purposeById(id) {
+  return cfg().purposes.find(function (p) { return p.id === id; }) || { id: id, label: String(id || 'Unknown'), layout: 'list', printTitle: '' };
+}
+function purposeLabel(id) { return purposeById(id).label; }
+function statusPurpose(id) { var x = statusById(id); return x ? x.purpose : null; }
+/* True when students with this status are placed in a seat grid (not on a list). */
+function isSeatedStatus(id) { var p = statusPurpose(id); return !!p && purposeById(p).layout === 'seated'; }
+function statusColor(id) { var x = statusById(id); return x && isHex(x.color) ? x.color : '#6b7a99'; }
+function hexToRgb(h) { var n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function pillHTML(id) {
+  var c = statusColor(id), rgb = hexToRgb(c);
+  return '<span class="pill" style="background:rgba(' + rgb.join(',') + ',0.12);color:' + c + '">' + esc(statusLabel(id)) + '</span>';
+}
+
+/* ---- room labels: positions are stored as numbers; labels are display only ---- */
+function letters(n) { var s = ''; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function lineLabel(n, total, style, from) {
+  var k = from === 'end' ? total - n + 1 : n;
+  return style === 'letter' ? letters(k) : String(k);
+}
+function rowLabel(r, n) { var L = r.layout || DEFAULT_ROOM_LAYOUT; return lineLabel(n, r.rows, L.rowLabels, L.rowFrom); }
+function seatLabel(r, n) { var L = r.layout || DEFAULT_ROOM_LAYOUT; return lineLabel(n, r.seatsPerRow, L.seatLabels, L.seatFrom); }
+function seatBlocked(r, row, seat) { return !!(r.layout && r.layout.blocked && r.layout.blocked[row + '_' + seat]); }
+function usableSeats(r) {
+  var n = 0;
+  for (var row = 1; row <= r.rows; row++) for (var seat = 1; seat <= r.seatsPerRow; seat++) if (!seatBlocked(r, row, seat)) n++;
+  return n;
+}
+
+/* ============================ MIGRATION ============================
+   Runs on every load and is idempotent: brings data saved by any
+   earlier version up to the current shape without changing what it
+   means. Missing settings take the original behaviour.
+   ================================================================ */
+function migrateConfig(c) {
+  c = isPlainObj(c) ? c : {};
+  fillDefaults(c, DEFAULT_CONFIG);
+  if (!Array.isArray(c.statuses) || !c.statuses.length) c.statuses = clone(DEFAULT_CONFIG.statuses);
+  if (!Array.isArray(c.purposes) || !c.purposes.length) c.purposes = clone(DEFAULT_CONFIG.purposes);
+  if (!Array.isArray(c.print.masterCols)) c.print.masterCols = clone(DEFAULT_CONFIG.print.masterCols);
+  if (!Array.isArray(c.print.listCols)) c.print.listCols = clone(DEFAULT_CONFIG.print.listCols);
+  if (!isHex(c.school.accent)) c.school.accent = DEFAULT_ACCENT;
+  return c;
+}
+function migrateRoom(r) {
+  r.layout = isPlainObj(r.layout) ? r.layout : {};
+  fillDefaults(r.layout, DEFAULT_ROOM_LAYOUT);
+  if (!isPlainObj(r.layout.blocked)) r.layout.blocked = {};
+  // List rooms never had a size; give one in case their type becomes a seat grid.
+  if (!(Number(r.rows) > 0)) r.rows = 12;
+  if (!(Number(r.seatsPerRow) > 0)) r.seatsPerRow = 18;
+  return r;
+}
+function migrateSession(s) {
+  s.settings = isPlainObj(s.settings) ? s.settings : {};
+  if (!Array.isArray(s.settings.keepApart)) s.settings.keepApart = [];
+  // Older sessions get the original rules, not whatever the school default is now.
+  fillDefaults(s.settings, DEFAULT_CONFIG.seating);
+  fillDefaults(s.settings, { shuffleSeed: 1, startTime: '', finishTime: '' });
+  (s.rooms || []).forEach(migrateRoom);
+  (s.students || []).forEach(function (st) {
+    if (st.arrangements == null) st.arrangements = '';
+    if (st.notes == null) st.notes = '';
+  });
+  normaliseSession(s);
+  return s;
+}
+/* Keep rooms and placements consistent with the current room-purpose settings. */
+function normaliseSession(s) {
+  if (!DB || !DB.config) return;
+  (s.rooms || []).forEach(function (r) { r.kind = purposeById(r.purpose).layout === 'seated' ? 'seated' : 'list'; });
+  (s.students || []).forEach(function (st) {
+    if (!st.roomId) return;
+    var r = s.rooms.find(function (x) { return x.id === st.roomId; });
+    if (!r) { st.roomId = null; st.row = null; st.seat = null; return; }
+    if (r.kind !== 'seated' && st.row) { st.row = null; st.seat = null; }
+  });
+}
+function migrateDB(db) {
+  db.config = migrateConfig(db.config);
+  db.sessions = db.sessions || [];
+  db.templates = db.templates || [];
+  db.templates.forEach(function (t) { (t.rooms || []).forEach(migrateRoom); });
+  var prev = DB; DB = db;           // helpers read DB.config
+  db.sessions.forEach(migrateSession);
+  DB = prev;
+  return db;
+}
+/* The per-session settings that travel in the Sessions tab's settingsJson column.
+   Keep-apart pairs travel separately in the Separations tab. */
+function sessionSettingsForSave(s) {
+  var o = {};
+  Object.keys(s.settings).forEach(function (k) { if (k !== 'keepApart') o[k] = s.settings[k]; });
+  return o;
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+function byName(a, b) { return (a.last + a.first).localeCompare(b.last + b.first); }
+function session() { return DB.sessions.find(function (s) { return s.id === DB.activeSessionId; }) || null; }
+function remote() { return !!CONFIG.API_URL; }
+
+function toast(msg, isErr) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'show err' : 'show';
+  clearTimeout(t._h);
+  t._h = setTimeout(function () { t.className = ''; }, 3200);
+}
+
+/* ==================== STORAGE & SYNC LAYER ==================== */
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+
+function setSync(state, text) {
+  document.getElementById('syncPill').className = 'sync-pill ' + state;
+  document.getElementById('syncText').textContent = text;
+}
+
+async function apiPost(payload) {
+  var res = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Network error ' + res.status);
+  return await res.json();
+}
+
+async function apiGet(params) {
+  var qs = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  var res = await fetch(CONFIG.API_URL + '?' + qs);
+  if (!res.ok) throw new Error('Network error ' + res.status);
+  return await res.json();
+}
+
+/* ---- mapping between the app model and the backend sheet rows ---- */
+function roomToRow(sid, r, i) {
+  return { sessionId: sid, roomId: r.id, name: r.name, layoutType: r.kind + ':' + r.purpose,
+           rows: r.rows || '', seatsPerRow: r.seatsPerRow || '', color: '', sortOrder: i,
+           layoutJson: JSON.stringify(r.layout || {}) };
+}
+function rowToRoom(x) {
+  var lt = String(x.layoutType || 'seated:main').split(':');
+  return migrateRoom({ id: String(x.roomId), name: String(x.name || ''), kind: lt[0] === 'list' ? 'list' : 'seated',
+           purpose: lt[1] || 'main', rows: Number(x.rows) || 12, seatsPerRow: Number(x.seatsPerRow) || 18,
+           layout: safeJSON(x.layoutJson, {}) });
+}
+function studentToRow(sid, st) {
+  return { sessionId: sid, studentId: st.id, firstName: st.first, lastName: st.last, homegroup: st.klass || '',
+           status: st.status, room: st.roomId || '', row: st.row || '', seat: st.seat || '',
+           arrangements: st.arrangements || '', notes: st.notes || '' };
+}
+function rowToStudent(x) {
+  return { id: String(x.studentId), first: String(x.firstName || ''), last: String(x.lastName || ''),
+           klass: String(x.homegroup || ''), status: String(x.status || 'Completing'),
+           roomId: String(x.room || '') || null, row: Number(x.row) || null, seat: Number(x.seat) || null,
+           arrangements: String(x.arrangements || ''), notes: String(x.notes || '') };
+}
+function sessionShell(s) {
+  var settings = safeJSON(s.settingsJson, {});
+  if (!isPlainObj(settings)) settings = {};
+  settings.keepApart = [];
+  return { id: s.sessionId, name: s.name, group: s.yearLevels || '', date: s.examDate || '',
+           version: Number(s.version) || 1, loaded: false, rooms: [], students: [], settings: settings };
+}
+
+/* Fetch the school-wide settings. An old backend has no getSettings action:
+   fall back to defaults and say so on the Settings tab instead of failing. */
+async function fetchSettings() {
+  var out;
+  try { out = await apiGet({ action: 'getSettings' }); }
+  catch (e) { out = { ok: false }; }
+  if (!out.ok) { backendHasSettings = false; DB.configVersion = 0; DB.config = migrateConfig({}); return; }
+  backendHasSettings = true;
+  DB.configVersion = Number(out.version) || 0;
+  DB.config = migrateConfig(safeJSON(out.valueJson, {}));
+}
+
+async function loadDB() {
+  if (remote()) {
+    setSync('saving', 'Loading');
+    try {
+      var both = await Promise.all([apiGet({ action: 'listSessions' }), apiGet({ action: 'listTemplates' })]);
+      var ls = both[0], lt = both[1];
+      if (!ls.ok) throw new Error(ls.error || 'load failed');
+      DB = {
+        version: 1,
+        sessions: (ls.sessions || []).map(sessionShell),
+        templates: (lt.ok ? lt.templates : []).map(function (t) { return { id: t.templateId, name: t.name, rooms: t.rooms || [] }; }),
+        activeSessionId: lsGet(CONFIG.STORAGE_KEY + '_active')
+      };
+      await fetchSettings();
+      migrateDB(DB);
+      if (!DB.sessions.find(function (s) { return s.id === DB.activeSessionId; })) {
+        DB.activeSessionId = DB.sessions.length ? DB.sessions[0].id : null;
+      }
+      if (DB.activeSessionId) await ensureLoaded(DB.activeSessionId);
+      setSync('ok', 'Synced');
+      return;
+    } catch (e) {
+      setSync('err', 'Offline');
+      toast('Could not reach the shared data: ' + e.message + ' — check your internet, then refresh', true);
+      DB = migrateDB({ version: 1, sessions: [], templates: [], activeSessionId: null });
+      return;
+    }
+  }
+  var raw = lsGet(CONFIG.STORAGE_KEY);
+  if (raw) { try { DB = JSON.parse(raw); } catch (e) { DB = null; } }
+  if (!DB || !DB.sessions) DB = buildSeedDB();
+  migrateDB(DB);
+  setSync('local', 'Local mode');
+}
+
+async function ensureLoaded(id) {
+  var s = DB.sessions.find(function (x) { return x.id === id; });
+  if (!s || s.loaded || !remote()) return;
+  var out = await apiGet({ action: 'getSession', sessionId: id });
+  if (!out.ok) throw new Error(out.error || 'session load failed');
+  s.rooms = (out.rooms || []).sort(function (a, b) { return Number(a.sortOrder) - Number(b.sortOrder); }).map(rowToRoom);
+  s.students = (out.students || []).map(rowToStudent);
+  var saved = safeJSON(out.session.settingsJson, null);
+  if (isPlainObj(saved)) Object.keys(saved).forEach(function (k) { if (k !== 'keepApart') s.settings[k] = saved[k]; });
+  s.settings.keepApart = (out.separations || []).map(function (p) {
+    var pair = [String(p.studentIdA), String(p.studentIdB)];
+    if (p.reason) pair.push(String(p.reason));
+    return pair;
+  });
+  s.version = Number(out.session.version) || s.version;
+  s.loaded = true;
+  migrateSession(s);
+}
+
+/* Load every session (remote mode loads lazily). Used before checks that
+   must see all data, such as deleting a status that might still be in use. */
+async function ensureAllLoaded() {
+  for (var i = 0; i < DB.sessions.length; i++) await ensureLoaded(DB.sessions[i].id);
+}
+
+function markDirty() {
+  if (!editor) return;
+  if (!remote()) { lsSet(CONFIG.STORAGE_KEY, JSON.stringify(DB)); return; }
+  setSync('saving', 'Saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function () { var s = session(); if (s) saveSessionNow(s); }, 1200);
+}
+
+async function saveSessionNow(s) {
+  try {
+    var out = await apiPost({
+      action: 'saveSessionData', password: editorPassword,
+      sessionId: s.id, version: s.version,
+      settingsJson: JSON.stringify(sessionSettingsForSave(s)),
+      students: s.students.map(function (st) { return studentToRow(s.id, st); }),
+      rooms: s.rooms.map(function (r, i) { return roomToRow(s.id, r, i); }),
+      separations: s.settings.keepApart.map(function (p) { return { sessionId: s.id, studentIdA: p[0], studentIdB: p[1], reason: p[2] || '' }; })
+    });
+    if (out.ok) { s.version = out.version; setSync('ok', 'Synced'); return true; }
+    if (out.error === 'VERSION_CONFLICT') { setSync('err', 'Conflict'); conflictModal(s); return false; }
+    throw new Error(out.error || 'Save rejected');
+  } catch (e) {
+    setSync('err', 'Save failed');
+    toast('Save failed: ' + e.message + ' — check your connection and make the change again', true);
+    return false;
+  }
+}
+
+/* Save the school-wide settings. Same optimistic-concurrency rule as sessions:
+   send the version we loaded; a stale save is refused, never overwritten. */
+async function saveConfigNow() {
+  if (!editor) return false;
+  if (!remote()) { lsSet(CONFIG.STORAGE_KEY, JSON.stringify(DB)); return true; }
+  if (!backendHasSettings) {
+    toast('Settings cannot be shared yet: the Google Sheet backend needs a one-off update (see SETUP_GUIDE.md, "Updating an existing install").', true);
+    return false;
+  }
+  setSync('saving', 'Saving');
+  try {
+    var out = await apiPost({ action: 'saveSettings', password: editorPassword, version: DB.configVersion, valueJson: JSON.stringify(DB.config) });
+    if (out.ok) { DB.configVersion = out.version; setSync('ok', 'Synced'); return true; }
+    if (out.error === 'VERSION_CONFLICT') { setSync('err', 'Conflict'); settingsConflictModal(); return false; }
+    if (out.error === 'SETTINGS_TOO_LARGE') throw new Error('the settings are too big to store — try a smaller logo');
+    throw new Error(out.error || 'Save rejected');
+  } catch (e) {
+    setSync('err', 'Save failed');
+    toast('Settings not saved: ' + e.message + ' — check your connection and try again', true);
+    return false;
+  }
+}
+
+function settingsConflictModal() {
+  openModal('Someone else changed the settings',
+    '<p>Another editor saved the school settings after you loaded them. To protect their work, your settings changes were <b>not</b> saved.</p><p style="margin-top:8px">Reload to get their version, then make your change again.</p>',
+    [{ label: 'Reload latest', cls: 'btn', fn: async function () {
+      try { await fetchSettings(); DB.sessions.forEach(normaliseSession); setSync('ok', 'Synced'); }
+      catch (e) { toast('Reload failed: ' + e.message, true); }
+      settingsDraft = null; applyBranding(); closeModal(); render();
+    } }]);
+}
+
+function conflictModal(s) {
+  openModal('Someone else saved first',
+    '<p>Another editor saved changes to <b>' + esc(s.name) + '</b> after you loaded it. To protect their work, your last change was <b>not</b> saved.</p><p style="margin-top:8px">Reload to get the latest plan, then redo your change.</p>',
+    [{ label: 'Reload latest', cls: 'btn', fn: async function () {
+      s.loaded = false;
+      try { await ensureLoaded(s.id); setSync('ok', 'Synced'); }
+      catch (e) { toast('Reload failed: ' + e.message, true); }
+      closeModal(); render();
+    } }]);
+}
+
+/* ========================= EDITOR MODE ========================= */
+function toggleEditor() {
+  if (editor) {
+    editor = false; editorPassword = ''; selectedSeat = null;
+    document.body.classList.remove('is-editor');
+    document.getElementById('editorBtn').textContent = 'Editor sign in';
+    settingsDraft = null;
+    if (activeTab === 'rooms' || activeTab === 'settings') activeTab = 'seating';
+    render();
+    toast('Now in view-only mode');
+    return;
+  }
+  openModal('Editor sign in',
+    '<p class="muted" style="margin-bottom:12px">Editing is limited to exam coordinators. Enter the editor password to unlock changes — everyone else can view and print without signing in.</p>' +
+    '<div class="form-row"><label>Editor password</label><input type="password" id="pwInput" autocomplete="off"></div>',
+    [{ label: 'Sign in', cls: 'btn', fn: attemptSignIn }]);
+  setTimeout(function () {
+    var el = document.getElementById('pwInput');
+    if (el) { el.focus(); el.onkeydown = function (e) { if (e.key === 'Enter') attemptSignIn(); }; }
+  }, 60);
+}
+
+async function attemptSignIn() {
+  var el = document.getElementById('pwInput');
+  var pw = el ? el.value : '';
+  if (remote()) {
+    try {
+      var out = await apiPost({ action: 'checkPassword', password: pw });
+      if (!out.ok) { toast('Wrong password', true); return; }
+    } catch (e) { toast('Could not verify — check your connection', true); return; }
+  } else if (pw !== CONFIG.LOCAL_EDITOR_PASSWORD) {
+    toast('Wrong password', true); return;
+  }
+  editorPassword = pw; editor = true;
+  document.body.classList.add('is-editor');
+  document.getElementById('editorBtn').textContent = 'Sign out (editing)';
+  closeModal(); render();
+  toast('Editing unlocked');
+}
+
+/* =========================== MODAL ============================ */
+function openModal(title, bodyHTML, buttons, wide) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = bodyHTML;
+  document.getElementById('modalBox').className = wide ? 'modal wide' : 'modal';
+  var foot = document.getElementById('modalFoot');
+  foot.innerHTML = '';
+  var cancel = document.createElement('button');
+  cancel.className = 'btn secondary'; cancel.textContent = 'Cancel'; cancel.onclick = closeModal;
+  foot.appendChild(cancel);
+  (buttons || []).forEach(function (b) {
+    var btn = document.createElement('button');
+    btn.className = b.cls || 'btn'; btn.textContent = b.label; btn.onclick = b.fn;
+    foot.appendChild(btn);
+  });
+  document.getElementById('modalBack').classList.add('open');
+}
+function closeModal() { document.getElementById('modalBack').classList.remove('open'); }
+
+/* ========================= NAVIGATION ========================= */
+var EDITOR_TABS = { rooms: 1, settings: 1 };
+function go(tab) {
+  if (EDITOR_TABS[tab] && !editor) return;
+  activeTab = tab;
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  var s = session();
+  document.getElementById('sessionBadge').textContent = s ? s.name : 'No session';
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === activeTab); });
+  if (EDITOR_TABS[activeTab] && !editor) activeTab = 'seating';
+  var views = { sessions: viewSessions, students: viewStudents, rooms: viewRooms, seating: viewSeating, lookup: viewLookup, print: viewPrint, help: viewHelp, settings: viewSettings };
+  document.getElementById('main').innerHTML = (views[activeTab] || viewSessions)();
+  if (activeTab === 'lookup') { var el = document.getElementById('searchInput'); if (el) el.focus(); }
+}
+
+function noSessionMsg() {
+  return '<div class="empty-msg">No exam session is open. Go to <b>Exam Sessions</b> and open or create one.</div>';
+}
+
+
+/* ====================== VIEW: SESSIONS ======================== */
+function viewSessions() {
+  var cards = DB.sessions.map(function (s) {
+    var isLoaded = s.loaded || !remote();
+    var total = isLoaded ? s.students.length : '—';
+    var seated = isLoaded ? s.students.filter(function (st) { return st.roomId && st.row; }).length : '—';
+    var rooms = isLoaded ? s.rooms.length : '—';
+    return '<div class="session-card ' + (s.id === DB.activeSessionId ? 'active' : '') + '" onclick="openSession(\'' + s.id + '\')">' +
+      '<h3>' + esc(s.name) + '</h3>' +
+      '<div class="sc-sub">' + esc(s.group || '') + (s.date ? ' &middot; ' + esc(s.date) : '') + '</div>' +
+      '<div class="sc-stats"><span><b>' + total + '</b>Students</span><span><b>' + seated + '</b>Seated</span><span><b>' + rooms + '</b>Rooms</span></div>' +
+      '<div class="sc-actions editor-only" onclick="event.stopPropagation()">' +
+        '<button class="btn small secondary" onclick="editSessionModal(\'' + s.id + '\')">Edit</button>' +
+        '<button class="btn small secondary" onclick="duplicateSession(\'' + s.id + '\')">Duplicate</button>' +
+        '<button class="btn small danger" onclick="deleteSession(\'' + s.id + '\')">Delete</button>' +
+      '</div></div>';
+  }).join('');
+  return '<div class="view-note">You are in <b>view-only mode</b> — browse, search and print everything you need. Nothing you click can change the data. Coordinators use "Editor sign in" (top right) to make changes.</div>' +
+    '<div class="section-head"><div><h2>Exam Sessions</h2><p>Each session is one exam event with its own students, rooms and seating plan. Click a session to open it.</p></div>' +
+    '<div class="toolbar"><button class="btn editor-only" onclick="newSessionModal()">+ New session</button>' +
+    '<button class="btn secondary" onclick="savePlanFile()" title="Download every session as one file — a backup you can open on any computer">Save to file</button>' +
+    '<button class="btn secondary editor-only" onclick="openPlanFile()" title="Load a plan saved with Save to file">Open file</button></div></div>' +
+    (DB.sessions.length ? '<div class="session-grid">' + cards + '</div>'
+      : '<div class="empty-msg">No exam sessions yet. Sign in as an editor and click "+ New session" to create the first one.</div>');
+}
+
+async function openSession(id) {
+  DB.activeSessionId = id;
+  lsSet(CONFIG.STORAGE_KEY + '_active', id);
+  if (!remote()) { if (editor) markDirty(); }
+  else {
+    try { setSync('saving', 'Loading'); await ensureLoaded(id); setSync('ok', 'Synced'); }
+    catch (e) { toast('Could not load that session: ' + e.message, true); }
+  }
+  go('students');
+}
+
+function timeFields(s) {
+  var st = s ? s.settings : {};
+  return '<div class="form-grid"><div class="form-row"><label>Start time (optional)</label><input type="time" id="f_start" value="' + esc(st.startTime || '') + '"></div>' +
+    '<div class="form-row"><label>Finish time (optional)</label><input type="time" id="f_finish" value="' + esc(st.finishTime || '') + '"></div></div>';
+}
+
+function newSessionModal() {
+  if (!editor) return;
+  var tmplOpts = DB.templates.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
+  openModal('New exam session',
+    '<div class="form-row"><label>Session name</label><input type="text" id="f_name" placeholder="e.g. Semester 1 Exams 2027"></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Year group</label><input type="text" id="f_group" placeholder="e.g. Year 7"></div>' +
+    '<div class="form-row"><label>Date</label><input type="date" id="f_date"></div></div>' +
+    timeFields(null) +
+    '<div class="form-row"><label>Start rooms from</label><select id="f_tmpl"><option value="">Blank (add rooms later)</option>' + tmplOpts + '</select></div>',
+    [{ label: 'Create session', cls: 'btn', fn: async function () {
+      var name = document.getElementById('f_name').value.trim();
+      if (!name) { toast('Give the session a name', true); return; }
+      var tmpl = DB.templates.find(function (t) { return t.id === document.getElementById('f_tmpl').value; });
+      var s = {
+        id: uid(), name: name,
+        group: document.getElementById('f_group').value.trim(),
+        date: document.getElementById('f_date').value,
+        version: 1, loaded: true,
+        rooms: tmpl ? JSON.parse(JSON.stringify(tmpl.rooms)).map(function (r) { r.id = uid(); return r; }) : [],
+        students: [], settings: clone(cfg().seating)
+      };
+      s.settings.keepApart = [];
+      s.settings.startTime = document.getElementById('f_start').value;
+      s.settings.finishTime = document.getElementById('f_finish').value;
+      migrateSession(s);
+      if (remote()) {
+        try {
+          var out = await apiPost({ action: 'createSession', password: editorPassword, name: s.name, examDate: s.date, yearLevels: s.group,
+                                    settingsJson: JSON.stringify(sessionSettingsForSave(s)) });
+          if (!out.ok) throw new Error(out.error || 'create failed');
+          s.id = out.session.sessionId; s.version = Number(out.session.version) || 1;
+          DB.sessions.push(s); DB.activeSessionId = s.id;
+          lsSet(CONFIG.STORAGE_KEY + '_active', s.id);
+          if (s.rooms.length) await saveSessionNow(s);
+        } catch (e) { toast('Could not create session: ' + e.message, true); return; }
+      } else {
+        DB.sessions.push(s); DB.activeSessionId = s.id; markDirty();
+      }
+      closeModal(); go('students');
+      toast('Session created — now add students');
+    } }]);
+}
+
+function editSessionModal(id) {
+  if (!editor) return;
+  var s = DB.sessions.find(function (x) { return x.id === id; });
+  openModal('Edit session',
+    '<div class="form-row"><label>Session name</label><input type="text" id="f_name" value="' + esc(s.name) + '"></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Year group</label><input type="text" id="f_group" value="' + esc(s.group || '') + '"></div>' +
+    '<div class="form-row"><label>Date</label><input type="date" id="f_date" value="' + esc(s.date || '') + '"></div></div>' +
+    timeFields(s),
+    [{ label: 'Save', cls: 'btn', fn: async function () {
+      var start = document.getElementById('f_start').value, finish = document.getElementById('f_finish').value;
+      var timesChanged = start !== (s.settings.startTime || '') || finish !== (s.settings.finishTime || '');
+      s.name = document.getElementById('f_name').value.trim() || s.name;
+      s.group = document.getElementById('f_group').value.trim();
+      s.date = document.getElementById('f_date').value;
+      if (remote()) {
+        try {
+          var out = await apiPost({ action: 'updateSessionInfo', password: editorPassword, sessionId: s.id, name: s.name, yearLevels: s.group, examDate: s.date });
+          if (!out.ok) throw new Error(out.error || 'update failed');
+          if (timesChanged) {
+            await ensureLoaded(s.id);
+            s.settings.startTime = start; s.settings.finishTime = finish;
+            await saveSessionNow(s);
+          }
+        } catch (e) { toast('Changes not saved: ' + e.message, true); }
+      } else { s.settings.startTime = start; s.settings.finishTime = finish; markDirty(); }
+      closeModal(); render();
+    } }]);
+}
+
+async function duplicateSession(id) {
+  if (!editor) return;
+  var s = DB.sessions.find(function (x) { return x.id === id; });
+  if (remote()) {
+    try {
+      await ensureLoaded(id);
+      var out = await apiPost({ action: 'createSession', password: editorPassword, name: s.name + ' (copy)', examDate: s.date, yearLevels: s.group });
+      if (!out.ok) throw new Error(out.error || 'create failed');
+      var copy = JSON.parse(JSON.stringify(s));
+      copy.id = out.session.sessionId; copy.name = s.name + ' (copy)';
+      copy.version = Number(out.session.version) || 1; copy.loaded = true;
+      DB.sessions.push(copy);
+      await saveSessionNow(copy);
+    } catch (e) { toast('Duplicate failed: ' + e.message, true); return; }
+  } else {
+    var c = JSON.parse(JSON.stringify(s));
+    c.id = uid(); c.name = s.name + ' (copy)';
+    DB.sessions.push(c); markDirty();
+  }
+  render();
+  toast('Session duplicated');
+}
+
+function deleteSession(id) {
+  if (!editor) return;
+  var s = DB.sessions.find(function (x) { return x.id === id; });
+  openModal('Delete session?',
+    '<p>This permanently removes <b>' + esc(s.name) + '</b> including its students and seating plan. This cannot be undone.</p>',
+    [{ label: 'Delete permanently', cls: 'btn danger', fn: async function () {
+      if (remote()) {
+        try {
+          var out = await apiPost({ action: 'deleteSession', password: editorPassword, sessionId: id });
+          if (!out.ok) throw new Error(out.error || 'delete failed');
+        } catch (e) { toast('Delete failed: ' + e.message, true); return; }
+      }
+      DB.sessions = DB.sessions.filter(function (x) { return x.id !== id; });
+      if (DB.activeSessionId === id) DB.activeSessionId = DB.sessions.length ? DB.sessions[0].id : null;
+      if (!remote()) markDirty();
+      closeModal(); render();
+    } }]);
+}
+
+/* ====================== VIEW: STUDENTS ======================== */
+function roomName(s, roomId) { var r = s.rooms.find(function (x) { return x.id === roomId; }); return r ? r.name : '—'; }
+/* CSS class for a status's room purpose: built-in purposes are styled (special, withdrawn). */
+function pillClass(status) { return statusPurpose(status) || 'none'; }
+/* "GYM · Row 3 · Seat 7" with the room's own row/seat labels. */
+function locText(s, st, empty) {
+  var r = s.rooms.find(function (x) { return x.id === st.roomId; });
+  if (!r) return empty === undefined ? '—' : empty;
+  if (st.row) return esc(r.name) + ' &middot; Row ' + esc(rowLabel(r, st.row)) + ' &middot; Seat ' + esc(seatLabel(r, st.seat));
+  return esc(r.name);
+}
+
+function viewStudents() {
+  var s = session();
+  if (!s) return noSessionMsg();
+  var q = studentFilter.q.toLowerCase();
+  var list = s.students.slice().sort(byName);
+  if (q) list = list.filter(function (st) { return (st.first + ' ' + st.last + ' ' + (st.klass || '')).toLowerCase().indexOf(q) >= 0; });
+  if (studentFilter.status !== 'all') list = list.filter(function (st) { return st.status === studentFilter.status; });
+  var rows = list.map(function (st) {
+    var extra = (st.arrangements ? '<div class="t-extra">' + esc(st.arrangements) + '</div>' : '');
+    return '<tr><td class="t-last">' + esc(st.last) + '</td><td>' + esc(st.first) + extra + '</td><td>' + esc(st.klass || '') + '</td>' +
+      '<td>' + pillHTML(st.status) + '</td><td>' + locText(s, st) + '</td>' +
+      '<td class="editor-only" style="white-space:nowrap"><button class="btn small secondary" onclick="studentModal(\'' + st.id + '\')">Edit</button> ' +
+      '<button class="btn small danger" onclick="deleteStudent(\'' + st.id + '\')">&#10005;</button></td></tr>';
+  }).join('');
+  var statusOpts = '<option value="all"' + (studentFilter.status === 'all' ? ' selected' : '') + '>All statuses</option>' +
+    statusList().map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (studentFilter.status === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>';
+    }).join('');
+  return '<div class="view-note">View-only mode — browse and search freely; nothing can be changed.</div>' +
+    '<div class="section-head"><div><h2>Students — ' + esc(s.name) + '</h2><p>The master list for this session. Import from Excel or CSV, or add students one at a time. Change a status here and the seating plan updates automatically.</p></div>' +
+    '<div class="toolbar editor-only"><button class="btn" onclick="startImport()">Import Excel / CSV</button>' +
+    '<button class="btn secondary" onclick="studentModal()">+ Add student</button>' +
+    '<button class="btn secondary" onclick="exportCSV()">Export CSV</button></div></div>' +
+    '<div class="filter-bar"><input type="text" placeholder="Filter by name or class" value="' + esc(studentFilter.q) + '" oninput="studentFilter.q=this.value;render()">' +
+    '<select onchange="studentFilter.status=this.value;render()">' + statusOpts + '</select>' +
+    '<span class="muted">' + list.length + ' of ' + s.students.length + ' students</span></div>' +
+    (s.students.length ? '<div class="table-wrap"><table class="data"><thead><tr><th>Surname</th><th>First name</th><th>Class</th><th>Status</th><th>Seat</th><th class="editor-only"></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      : '<div class="empty-msg">No students yet.<br><br>Editors: click <b>Import Excel / CSV</b> to load a class list, or <b>+ Add student</b> to type one in.</div>');
+}
+
+function studentModal(id) {
+  if (!editor) return;
+  var s = session();
+  var st = id ? s.students.find(function (x) { return x.id === id; }) : null;
+  var statusOpts = statusList().map(function (x) {
+    return '<option value="' + esc(x.id) + '"' + (st && st.status === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>';
+  }).join('');
+  if (st && !statusById(st.status)) statusOpts += '<option value="' + esc(st.status) + '" selected>' + esc(st.status) + ' (no longer in Settings)</option>';
+  openModal(st ? 'Edit student' : 'Add student',
+    '<div class="form-grid"><div class="form-row"><label>First name</label><input type="text" id="f_first" value="' + (st ? esc(st.first) : '') + '"></div>' +
+    '<div class="form-row"><label>Surname</label><input type="text" id="f_last" value="' + (st ? esc(st.last) : '') + '"></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Class / homegroup</label><input type="text" id="f_klass" value="' + (st ? esc(st.klass || '') : '') + '"></div>' +
+    '<div class="form-row"><label>Status</label><select id="f_status">' + statusOpts + '</select></div></div>' +
+    '<div class="form-row"><label>Special arrangements (optional)</label><textarea id="f_arr" rows="2" placeholder="e.g. Reader, extra time 25%, rest breaks">' + (st ? esc(st.arrangements || '') : '') + '</textarea></div>' +
+    '<div class="form-row"><label>Notes (optional)</label><textarea id="f_notes" rows="2">' + (st ? esc(st.notes || '') : '') + '</textarea></div>' +
+    '<p class="muted">Changing status releases the student\'s seat and moves them to the room for their new status.</p>',
+    [{ label: st ? 'Save changes' : 'Add student', cls: 'btn', fn: function () {
+      var first = document.getElementById('f_first').value.trim();
+      var last = document.getElementById('f_last').value.trim();
+      if (!first && !last) { toast('Enter a name', true); return; }
+      var status = document.getElementById('f_status').value;
+      var klass = document.getElementById('f_klass').value.trim();
+      var arr = document.getElementById('f_arr').value.trim(), notes = document.getElementById('f_notes').value.trim();
+      if (st) {
+        st.first = first; st.last = last; st.klass = klass; st.arrangements = arr; st.notes = notes;
+        if (st.status !== status) { st.status = status; routeStudent(s, st); }
+      } else {
+        var ns = { id: uid(), first: first, last: last, klass: klass, status: status, roomId: null, row: null, seat: null, arrangements: arr, notes: notes };
+        routeStudent(s, ns);
+        s.students.push(ns);
+      }
+      markDirty(); closeModal(); render();
+    } }]);
+}
+
+/* THE single place that decides placement from status (see CLAUDE.md).
+   Clears any seat. A status whose room purpose is a seat grid waits for
+   Generate seating or a manual move; a list purpose goes straight to the
+   first room with that purpose. Rules come from Settings → Statuses. */
+function routeStudent(s, st) {
+  st.row = null; st.seat = null; st.roomId = null;
+  var pid = statusPurpose(st.status);
+  if (!pid || purposeById(pid).layout === 'seated') return;
+  var r = s.rooms.find(function (x) { return x.purpose === pid; });
+  if (r) st.roomId = r.id;
+}
+
+function deleteStudent(id) {
+  if (!editor) return;
+  var s = session();
+  var st = s.students.find(function (x) { return x.id === id; });
+  openModal('Remove student?', '<p>Remove <b>' + esc(st.first) + ' ' + esc(st.last) + '</b> from this session?</p>',
+    [{ label: 'Remove', cls: 'btn danger', fn: function () {
+      s.students = s.students.filter(function (x) { return x.id !== id; });
+      s.settings.keepApart = s.settings.keepApart.filter(function (p) { return p[0] !== id && p[1] !== id; });
+      markDirty(); closeModal(); render();
+    } }]);
+}
+
+function exportCSV() {
+  if (!editor) return;
+  var s = session();
+  var lines = [['First', 'Surname', 'Class', 'Status', 'Room', 'Row', 'Seat', 'Arrangements', 'Notes'].join(',')];
+  s.students.slice().sort(byName).forEach(function (st) {
+    var r = s.rooms.find(function (x) { return x.id === st.roomId; });
+    lines.push([st.first, st.last, st.klass || '', statusLabel(st.status), roomName(s, st.roomId),
+                st.row && r ? rowLabel(r, st.row) : '', st.seat && r ? seatLabel(r, st.seat) : '', st.arrangements || '', st.notes || '']
+      .map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','));
+  });
+  var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = s.name.replace(/[^a-z0-9]+/gi, '_') + '_students.csv';
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+
+/* ==================== IMPORT (Excel / CSV) ==================== */
+function startImport() {
+  if (!editor) return;
+  var inp = document.getElementById('fileInput');
+  inp.value = '';
+  inp.onchange = function () { if (inp.files[0]) readImportFile(inp.files[0]); };
+  inp.click();
+}
+
+function readImportFile(file) {
+  if (typeof XLSX === 'undefined') {
+    toast('The spreadsheet reader did not load. Check your internet connection and refresh the page.', true);
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      var cleaned = rows.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+      if (cleaned.length < 2) { toast('That file looks empty', true); return; }
+      importRows = cleaned;
+      showMappingModal();
+    } catch (err) { toast('Could not read that file: ' + err.message, true); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function guessCol(headers, keys) {
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i]).toLowerCase();
+    for (var j = 0; j < keys.length; j++) if (h.indexOf(keys[j]) >= 0) return i;
+  }
+  return -1;
+}
+
+function showMappingModal() {
+  var headers = importRows[0].map(function (h) { return String(h); });
+  function opts(i) {
+    return '<option value="-1">— not in file —</option>' + headers.map(function (h, j) {
+      return '<option value="' + j + '"' + (j === i ? ' selected' : '') + '>' + esc(h) + '</option>';
+    }).join('');
+  }
+  var preview = importRows.slice(1, 4).map(function (r) {
+    return '<tr>' + r.slice(0, 6).map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  openModal('Match your columns',
+    '<p class="muted" style="margin-bottom:12px">Found <b>' + (importRows.length - 1) + '</b> rows. Tell the app which column holds what — it has guessed where it can.</p>' +
+    '<div class="form-grid"><div class="form-row"><label>First name column</label><select id="m_first">' + opts(guessCol(headers, ['first', 'given'])) + '</select></div>' +
+    '<div class="form-row"><label>Surname column</label><select id="m_last">' + opts(guessCol(headers, ['surname', 'last', 'family'])) + '</select></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Class / homegroup</label><select id="m_klass">' + opts(guessCol(headers, ['class', 'homegroup', 'home group', 'form', 'hg'])) + '</select></div>' +
+    '<div class="form-row"><label>Status (optional)</label><select id="m_status">' + opts(guessCol(headers, ['status', 'provision'])) + '</select></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Arrangements (optional)</label><select id="m_arr">' + opts(guessCol(headers, ['arrangement', 'adjustment'])) + '</select></div>' +
+    '<div class="form-row"><label>Notes (optional)</label><select id="m_notes">' + opts(guessCol(headers, ['note', 'comment'])) + '</select></div></div>' +
+    '<div class="form-row"><label>How to add these students</label><select id="m_mode"><option value="replace">Replace the current student list</option><option value="append">Add to the current student list</option></select></div>' +
+    '<label>File preview (first rows)</label><div class="table-wrap" style="max-height:130px"><table class="data"><tbody>' + preview + '</tbody></table></div>',
+    [{ label: 'Import students', cls: 'btn', fn: doImport }], true);
+}
+
+/* Match a spreadsheet status cell to a status: its label, or any of its
+   import keywords (Settings → Statuses). The first status is the default. */
+function matchImportStatus(raw) {
+  raw = String(raw || '').toLowerCase().trim();
+  var list = statusList();
+  if (!raw) return list[0].id;
+  for (var i = 1; i < list.length + 1; i++) {
+    var x = list[i % list.length];
+    var keys = String(x.keywords || '').split(',').map(function (k) { return k.trim().toLowerCase(); }).filter(Boolean);
+    keys.push(String(x.label).toLowerCase());
+    for (var j = 0; j < keys.length; j++) if (raw.indexOf(keys[j]) >= 0) return x.id;
+  }
+  return list[0].id;
+}
+
+function doImport() {
+  if (!editor) return;
+  var s = session();
+  function ci(id) { return parseInt(document.getElementById(id).value, 10); }
+  var cFirst = ci('m_first'), cLast = ci('m_last'), cKlass = ci('m_klass'), cStatus = ci('m_status'), cArr = ci('m_arr'), cNotes = ci('m_notes');
+  if (cFirst < 0 && cLast < 0) { toast('Pick at least a name column', true); return; }
+  var mode = document.getElementById('m_mode').value;
+  var incoming = [];
+  var skipped = 0;
+  importRows.slice(1).forEach(function (r) {
+    var first = cFirst >= 0 ? String(r[cFirst]).trim() : '';
+    var last = cLast >= 0 ? String(r[cLast]).trim() : '';
+    // A real student always has a surname. Rows without one are almost always
+    // spreadsheet totals ("Mean", "Median", "Standard Deviation") or blank
+    // filler, so they are skipped rather than imported as students.
+    if (cLast >= 0 ? !last : !first) { if (first || last) skipped++; return; }
+    if (!first && !last) return;
+    var status = cStatus >= 0 ? matchImportStatus(r[cStatus]) : defaultStatusId();
+    var st = { id: uid(), first: first, last: last, klass: cKlass >= 0 ? String(r[cKlass]).trim() : '', status: status, roomId: null, row: null, seat: null,
+               arrangements: cArr >= 0 ? String(r[cArr]).trim() : '', notes: cNotes >= 0 ? String(r[cNotes]).trim() : '' };
+    routeStudent(s, st);
+    incoming.push(st);
+  });
+  if (mode === 'replace') { s.students = incoming; s.settings.keepApart = []; }
+  else s.students = s.students.concat(incoming);
+  markDirty(); closeModal(); render();
+  toast(incoming.length + ' students imported' +
+    (skipped ? ', ' + skipped + ' non-student row' + (skipped > 1 ? 's' : '') + ' skipped (no surname)' : '') +
+    ' — go to Seating Plan and click Generate');
+}
+
+/* ======================= VIEW: ROOMS ========================== */
+function roomSummary(r) {
+  if (r.kind !== 'seated') return 'list only, no seat numbers';
+  var cap = usableSeats(r), total = r.rows * r.seatsPerRow;
+  return r.rows + ' rows &times; ' + r.seatsPerRow + ' seats (' + cap + ' capacity' + (cap < total ? ', ' + (total - cap) + ' seats blocked' : '') + ')';
+}
+
+function viewRooms() {
+  var s = session();
+  if (!s) return noSessionMsg();
+  var cards = s.rooms.map(function (r, i) {
+    return '<div class="room-card ' + esc(r.purpose) + '"><h3>' + esc(r.name) + '</h3>' +
+      '<div class="rc-sub">' + esc(purposeLabel(r.purpose)) + ' &middot; ' + roomSummary(r) +
+      (r.layout && r.layout.supervisor ? '<br>Supervisor: ' + esc(r.layout.supervisor) : '') +
+      '</div><div class="rc-actions"><button class="btn small secondary" onclick="roomModal(\'' + r.id + '\')">Edit</button>' +
+      '<button class="btn small danger" onclick="deleteRoom(\'' + r.id + '\')">Delete</button>' +
+      '<span class="rc-order">' +
+      '<button class="btn small secondary" title="Fill this room earlier" onclick="moveRoom(\'' + r.id + '\',-1)"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
+      '<button class="btn small secondary" title="Fill this room later" onclick="moveRoom(\'' + r.id + '\',1)"' + (i === s.rooms.length - 1 ? ' disabled' : '') + '>&#9660;</button>' +
+      '</span></div></div>';
+  }).join('');
+  var tmpls = DB.templates.map(function (t) {
+    return '<div class="room-card"><h3>' + esc(t.name) + '</h3>' +
+      '<div class="rc-sub">' + (t.rooms.map(function (r) { return esc(r.name); }).join(' &middot; ') || 'empty') + '</div>' +
+      '<div class="rc-actions"><button class="btn small secondary" onclick="applyTemplate(\'' + t.id + '\')">Apply to this session</button>' +
+      '<button class="btn small danger" onclick="deleteTemplate(\'' + t.id + '\')">Delete</button></div></div>';
+  }).join('');
+  return '<div class="section-head"><div><h2>Rooms &amp; Layout — ' + esc(s.name) + '</h2>' +
+    '<p>Set up where this exam happens. Seat-grid rooms are filled in the order shown (use &#9650;&#9660; to change it); list rooms just hold names. Room types are set in <b>Settings</b>. Save a set of rooms as a template to reuse next time.</p></div>' +
+    '<div class="toolbar"><button class="btn" onclick="roomModal()">+ Add room</button>' +
+    '<button class="btn secondary" onclick="saveTemplateModal()">Save rooms as template</button></div></div>' +
+    (s.rooms.length ? '<div class="room-cards">' + cards + '</div>'
+      : '<div class="empty-msg" style="margin-bottom:22px">No rooms yet — click "+ Add room". Most sessions need one seat-grid room plus a list room for each other room type.</div>') +
+    '<div class="section-head"><div><h2 style="font-size:1.1rem">Saved templates</h2><p>Templates are shared across all sessions.</p></div></div>' +
+    (DB.templates.length ? '<div class="room-cards">' + tmpls + '</div>' : '<div class="empty-msg">No templates saved yet.</div>');
+}
+
+function moveRoom(id, dir) {
+  if (!editor) return;
+  var s = session();
+  var i = s.rooms.findIndex(function (x) { return x.id === id; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= s.rooms.length) return;
+  var tmp = s.rooms[i]; s.rooms[i] = s.rooms[j]; s.rooms[j] = tmp;
+  markDirty(); render();
+}
+
+/* ---- room editor: the seat mask is edited on a draft until Save ---- */
+var roomDraft = null;
+var BLOCK_NEXT = { '': 'aisle', aisle: 'unusable', unusable: '' };
+
+function labelSelect(id, val) {
+  return '<select id="' + id + '" onchange="roomDraftChanged()"><option value="number"' + (val === 'number' ? ' selected' : '') + '>Numbers (1, 2, 3)</option>' +
+    '<option value="letter"' + (val === 'letter' ? ' selected' : '') + '>Letters (A, B, C)</option></select>';
+}
+function fromSelect(id, val, startTxt, endTxt) {
+  return '<select id="' + id + '" onchange="roomDraftChanged()"><option value="start"' + (val === 'start' ? ' selected' : '') + '>' + startTxt + '</option>' +
+    '<option value="end"' + (val === 'end' ? ' selected' : '') + '>' + endTxt + '</option></select>';
+}
+
+function roomModal(id) {
+  if (!editor) return;
+  var s = session();
+  var r = id ? s.rooms.find(function (x) { return x.id === id; }) : null;
+  var L = r ? r.layout : clone(DEFAULT_ROOM_LAYOUT);
+  roomDraft = { rows: r && r.rows ? r.rows : 12, seatsPerRow: r && r.seatsPerRow ? r.seatsPerRow : 18,
+                layout: clone(L) };
+  var purpose = r ? r.purpose : cfg().purposes[0].id;
+  var showGrid = purposeById(purpose).layout === 'seated';
+  var purposeOpts = cfg().purposes.map(function (p) {
+    return '<option value="' + esc(p.id) + '"' + (p.id === purpose ? ' selected' : '') + '>' + esc(p.label) + (p.layout === 'seated' ? ' (seat grid)' : ' (list)') + '</option>';
+  }).join('');
+  if (!cfg().purposes.some(function (p) { return p.id === purpose; })) purposeOpts += '<option value="' + esc(purpose) + '" selected>' + esc(purpose) + ' (no longer in Settings)</option>';
+  openModal(r ? 'Edit room' : 'Add room',
+    '<div class="form-grid"><div class="form-row"><label>Room name</label><input type="text" id="f_rname" value="' + (r ? esc(r.name) : '') + '" placeholder="e.g. Gym, Library, Room 12"></div>' +
+    '<div class="form-row"><label>Supervisor (optional)</label><input type="text" id="f_super" value="' + esc(L.supervisor || '') + '" placeholder="Printed on this room\'s sheet"></div></div>' +
+    '<div class="form-row"><label>Room type</label><select id="f_purpose" onchange="roomDraftChanged()">' + purposeOpts + '</select></div>' +
+    '<div id="gridFields" style="display:' + (showGrid ? 'block' : 'none') + '">' +
+    '<div class="form-grid">' +
+    '<div class="form-row"><label>Rows</label><input type="number" id="f_rows" min="1" max="60" value="' + roomDraft.rows + '" onchange="roomDraftChanged()"></div>' +
+    '<div class="form-row"><label>Seats per row</label><input type="number" id="f_seats" min="1" max="60" value="' + roomDraft.seatsPerRow + '" onchange="roomDraftChanged()"></div></div>' +
+    '<div class="form-grid">' +
+    '<div class="form-row"><label>Row labels</label>' + labelSelect('f_rowlab', L.rowLabels) + fromSelect('f_rowfrom', L.rowFrom, 'Start at the front', 'Start at the back') + '</div>' +
+    '<div class="form-row"><label>Seat labels</label>' + labelSelect('f_seatlab', L.seatLabels) + fromSelect('f_seatfrom', L.seatFrom, 'Start at seat 1 side', 'Start at the far side') + '</div></div>' +
+    '<div class="form-row"><label>Note at the bottom of the printed grid (optional)</label><textarea id="f_footer" rows="2" placeholder="e.g. Advanced: Row 1 Seat 1 to Row 3 Seat 11">' + esc(L.footer || '') + '</textarea></div>' +
+    '<label>Seat map — click a seat to cycle: open &rarr; aisle &rarr; unusable. Click a Row or Seat heading to block or clear the whole line.</label>' +
+    '<div id="maskWrap" class="mask-wrap"></div></div>',
+    [{ label: r ? 'Save changes' : 'Add room', cls: 'btn', fn: function () {
+      if (!editor) return;
+      var name = document.getElementById('f_rname').value.trim();
+      if (!name) { toast('Give the room a name', true); return; }
+      roomDraftChanged();
+      var purpose = document.getElementById('f_purpose').value;
+      var kind = purposeById(purpose).layout === 'seated' ? 'seated' : 'list';
+      var rows = roomDraft.rows, seatsPerRow = roomDraft.seatsPerRow;
+      var layout = roomDraft.layout;
+      layout.supervisor = document.getElementById('f_super').value.trim();
+      layout.footer = document.getElementById('f_footer').value.trim();
+      var target = r || { id: uid() };
+      target.name = name; target.purpose = purpose; target.kind = kind; target.rows = rows; target.seatsPerRow = seatsPerRow; target.layout = layout;
+      var released = 0;
+      if (r) {
+        s.students.forEach(function (st) {
+          if (st.roomId === r.id && st.row && (st.row > rows || st.seat > seatsPerRow || kind !== 'seated' || seatBlocked(r, st.row, st.seat))) {
+            st.row = null; st.seat = null; released++;
+          }
+        });
+      } else {
+        s.rooms.push(target);
+      }
+      roomDraft = null;
+      markDirty(); closeModal(); render();
+      if (released) toast(released + ' student' + (released > 1 ? 's were' : ' was') + ' in a removed or blocked seat and now need' + (released > 1 ? '' : 's') + ' a seat — see the Seating Plan', true);
+    } }], true);
+  drawMask();
+}
+
+/* Read the modal's inputs into the draft and redraw the seat map. */
+function roomDraftChanged() {
+  if (!roomDraft) return;
+  var showGrid = purposeById(document.getElementById('f_purpose').value).layout === 'seated';
+  document.getElementById('gridFields').style.display = showGrid ? 'block' : 'none';
+  roomDraft.rows = Math.min(60, Math.max(1, parseInt(document.getElementById('f_rows').value, 10) || 12));
+  roomDraft.seatsPerRow = Math.min(60, Math.max(1, parseInt(document.getElementById('f_seats').value, 10) || 18));
+  var L = roomDraft.layout;
+  L.rowLabels = document.getElementById('f_rowlab').value; L.rowFrom = document.getElementById('f_rowfrom').value;
+  L.seatLabels = document.getElementById('f_seatlab').value; L.seatFrom = document.getElementById('f_seatfrom').value;
+  Object.keys(L.blocked).forEach(function (k) {
+    var p = k.split('_');
+    if (Number(p[0]) > roomDraft.rows || Number(p[1]) > roomDraft.seatsPerRow) delete L.blocked[k];
+  });
+  drawMask();
+}
+
+function drawMask() {
+  var el = document.getElementById('maskWrap');
+  if (!el || !roomDraft) return;
+  var d = roomDraft, B = d.layout.blocked;
+  var t = '<table class="mask"><thead><tr><th></th>';
+  for (var row = 1; row <= d.rows; row++) t += '<th onclick="maskLine(\'row\',' + row + ')">Row ' + esc(lineLabel(row, d.rows, d.layout.rowLabels, d.layout.rowFrom)) + '</th>';
+  t += '</tr></thead><tbody>';
+  for (var seat = 1; seat <= d.seatsPerRow; seat++) {
+    t += '<tr><th onclick="maskLine(\'seat\',' + seat + ')">Seat ' + esc(lineLabel(seat, d.seatsPerRow, d.layout.seatLabels, d.layout.seatFrom)) + '</th>';
+    for (var row2 = 1; row2 <= d.rows; row2++) {
+      var b = B[row2 + '_' + seat] || '';
+      t += '<td class="m ' + b + '" title="' + (b || 'open') + '" onclick="maskCell(' + row2 + ',' + seat + ')"></td>';
+    }
+    t += '</tr>';
+  }
+  var blocked = Object.keys(B).length;
+  el.innerHTML = t + '</tbody></table><div class="muted" style="margin-top:6px">' + (d.rows * d.seatsPerRow - blocked) + ' usable seats' +
+    (blocked ? ' &middot; ' + blocked + ' blocked' : '') + ' &middot; <span class="m-key aisle"></span> aisle <span class="m-key unusable"></span> unusable</div>';
+}
+
+function maskCell(row, seat) {
+  if (!editor || !roomDraft) return;
+  var B = roomDraft.layout.blocked, k = row + '_' + seat;
+  var next = BLOCK_NEXT[B[k] || ''];
+  if (next) B[k] = next; else delete B[k];
+  drawMask();
+}
+
+function maskLine(kind, n) {
+  if (!editor || !roomDraft) return;
+  var d = roomDraft, B = d.layout.blocked, keys = [];
+  if (kind === 'row') for (var seat = 1; seat <= d.seatsPerRow; seat++) keys.push(n + '_' + seat);
+  else for (var row = 1; row <= d.rows; row++) keys.push(row + '_' + n);
+  var allBlocked = keys.every(function (k) { return B[k]; });
+  keys.forEach(function (k) { if (allBlocked) delete B[k]; else if (!B[k]) B[k] = 'aisle'; });
+  drawMask();
+}
+
+function deleteRoom(id) {
+  if (!editor) return;
+  var s = session();
+  var r = s.rooms.find(function (x) { return x.id === id; });
+  var count = s.students.filter(function (st) { return st.roomId === id; }).length;
+  openModal('Delete room?',
+    '<p>Delete <b>' + esc(r.name) + '</b>?' + (count ? ' The ' + count + ' students in it become unseated — they are not removed from the session.' : '') + '</p>',
+    [{ label: 'Delete room', cls: 'btn danger', fn: function () {
+      if (!editor) return;
+      s.students.forEach(function (st) { if (st.roomId === id) { st.roomId = null; st.row = null; st.seat = null; } });
+      s.rooms = s.rooms.filter(function (x) { return x.id !== id; });
+      markDirty(); closeModal(); render();
+    } }]);
+}
+
+function saveTemplateModal() {
+  if (!editor) return;
+  var s = session();
+  if (!s.rooms.length) { toast('Add rooms first', true); return; }
+  openModal('Save rooms as template',
+    '<div class="form-row"><label>Template name</label><input type="text" id="f_tname" placeholder="e.g. Main hall + two small rooms"></div>' +
+    '<p class="muted">Saves: ' + s.rooms.map(function (r) { return esc(r.name); }).join(', ') + ' — including blocked seats and labels.</p>',
+    [{ label: 'Save template', cls: 'btn', fn: async function () {
+      if (!editor) return;
+      var name = document.getElementById('f_tname').value.trim();
+      if (!name) { toast('Give the template a name', true); return; }
+      var rooms = JSON.parse(JSON.stringify(s.rooms)).map(function (r) { delete r.id; return r; });
+      if (remote()) {
+        try {
+          var out = await apiPost({ action: 'saveTemplate', password: editorPassword, name: name, rooms: rooms });
+          if (!out.ok) throw new Error(out.error || 'save failed');
+          var existing = DB.templates.find(function (t) { return t.name === name; });
+          if (existing) existing.rooms = rooms;
+          else DB.templates.push({ id: out.templateId, name: name, rooms: rooms });
+        } catch (e) { toast('Template not saved: ' + e.message, true); return; }
+      } else {
+        DB.templates.push({ id: uid(), name: name, rooms: rooms });
+        markDirty();
+      }
+      closeModal(); render();
+      toast('Template saved');
+    } }]);
+}
+
+function applyTemplate(id) {
+  if (!editor) return;
+  var s = session();
+  var t = DB.templates.find(function (x) { return x.id === id; });
+  openModal('Apply template?',
+    '<p>Replace this session\'s rooms with the <b>' + esc(t.name) + '</b> template? All current seat assignments are cleared — students stay on the list.</p>',
+    [{ label: 'Apply template', cls: 'btn', fn: function () {
+      if (!editor) return;
+      s.rooms = JSON.parse(JSON.stringify(t.rooms)).map(function (r) { r.id = uid(); return migrateRoom(r); });
+      normaliseSession(s);
+      s.students.forEach(function (st) { routeStudent(s, st); });
+      markDirty(); closeModal(); render();
+      toast('Template applied — now regenerate the seating plan');
+    } }]);
+}
+
+async function deleteTemplate(id) {
+  if (!editor) return;
+  if (remote()) {
+    try {
+      var out = await apiPost({ action: 'deleteTemplate', password: editorPassword, templateId: id });
+      if (!out.ok) throw new Error(out.error || 'delete failed');
+    } catch (e) { toast('Delete failed: ' + e.message, true); return; }
+  }
+  DB.templates = DB.templates.filter(function (t) { return t.id !== id; });
+  if (!remote()) markDirty();
+  render();
+}
+
+/* =================== SEATING ENGINE + VIEW ====================
+   Rules live in s.settings (per session, defaults from Settings):
+     sortBy   surname | first | class | import | random
+     pattern  all | alt-seat | alt-row | checker
+     rowDir   front | back          seatDir  ltr | rtl | snake
+     near     side | cross | all    (what counts as "next to" for keep-apart)
+   With the defaults (surname, all, front, ltr, cross) the result is
+   identical to the original engine.
+   ================================================================ */
+var SORT_OPTIONS = [['surname', 'Alphabetical by surname'], ['first', 'Alphabetical by first name'], ['class', 'Grouped by class, then surname'],
+                    ['import', 'Import order (as in your spreadsheet)'], ['random', 'Random (reshuffle any time)']];
+var PATTERN_OPTIONS = [['all', 'Every seat'], ['alt-seat', 'Every second seat'], ['alt-row', 'Every second row'], ['checker', 'Checkerboard (no one beside or behind)']];
+var ROWDIR_OPTIONS = [['front', 'Front to back'], ['back', 'Back to front']];
+var SEATDIR_OPTIONS = [['ltr', 'Seat 1 first, every row'], ['rtl', 'Far side first, every row'], ['snake', 'Snake (alternate direction each row)']];
+var NEAR_OPTIONS = [['side', 'Side by side only'], ['cross', 'Side by side, in front or behind'], ['all', 'Any of the 8 surrounding seats']];
+
+function optionsHTML(list, val) {
+  return list.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === val ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+}
+
+/* Seeded shuffle so "Random" gives the same plan until you reshuffle. */
+function seededShuffle(list, seed) {
+  var a = seed >>> 0 || 1;
+  function rnd() { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+  for (var i = list.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)); var tmp = list[i]; list[i] = list[j]; list[j] = tmp; }
+  return list;
+}
+
+function sortCandidates(s, list) {
+  var by = s.settings.sortBy;
+  if (by === 'class') return list.sort(function (a, b) { return (a.klass || '').localeCompare(b.klass || '') || byName(a, b); });
+  if (by === 'first') return list.sort(function (a, b) { return (a.first + a.last).localeCompare(b.first + b.last); });
+  if (by === 'import') return list;                     // s.students keeps spreadsheet order
+  if (by === 'random') return seededShuffle(list.sort(byName), s.settings.shuffleSeed);
+  return list.sort(byName);
+}
+
+/* Every usable [row, seat] in a room, in the order the engine fills them. */
+function seatOrder(s, r) {
+  var set = s.settings, out = [];
+  var rows = []; for (var i = 1; i <= r.rows; i++) rows.push(i);
+  if (set.rowDir === 'back') rows.reverse();
+  rows.forEach(function (row, ri) {
+    var seats = []; for (var k = 1; k <= r.seatsPerRow; k++) seats.push(k);
+    if (set.seatDir === 'rtl' || (set.seatDir === 'snake' && ri % 2 === 1)) seats.reverse();
+    seats.forEach(function (seat) {
+      if (seatBlocked(r, row, seat)) return;
+      if (set.pattern === 'alt-seat' && seat % 2 === 0) return;
+      if (set.pattern === 'alt-row' && row % 2 === 0) return;
+      if (set.pattern === 'checker' && (row + seat) % 2 === 1) return;
+      out.push([row, seat]);
+    });
+  });
+  return out;
+}
+
+function autoSeat() {
+  if (!editor) return;
+  var s = session();
+  var gridPurposes = cfg().purposes.filter(function (p) { return p.layout === 'seated'; });
+  var gridRooms = s.rooms.filter(function (r) { return r.kind === 'seated'; });
+  if (!gridRooms.length) { toast('Add a seat-grid room first (Rooms & Layout)', true); return; }
+  s.students.forEach(function (st) { if (isSeatedStatus(st.status)) { st.roomId = null; st.row = null; st.seat = null; } });
+  var seated = 0, leftover = 0, noRoom = [];
+  gridPurposes.forEach(function (p) {
+    var cands = sortCandidates(s, s.students.filter(function (st) { return statusPurpose(st.status) === p.id; }));
+    if (!cands.length) return;
+    var rooms = s.rooms.filter(function (r) { return r.purpose === p.id && r.kind === 'seated'; });
+    if (!rooms.length) { noRoom.push(p.label); leftover += cands.length; return; }
+    var i = 0;
+    rooms.forEach(function (room) {
+      seatOrder(s, room).forEach(function (pos) {
+        if (i >= cands.length) return;
+        var st = cands[i++];
+        st.roomId = room.id; st.row = pos[0]; st.seat = pos[1];
+      });
+    });
+    seated += i; leftover += cands.length - i;
+  });
+  s.students.forEach(function (st) { if (!isSeatedStatus(st.status)) routeStudent(s, st); });
+  fixKeepApart(s);
+  markDirty(); render();
+  if (noRoom.length) toast('Seated ' + seated + ' students — no room set up for: ' + noRoom.join(', ') + '. Add one in Rooms & Layout.', true);
+  else toast(leftover > 0 ? 'Seated ' + seated + ' students — ' + leftover + ' did not fit. Add rows or another room.' : 'Seated ' + seated + ' students', leftover > 0);
+}
+
+function adjacentPairs(s) {
+  var bad = [], near = s.settings.near || 'cross';
+  s.settings.keepApart.forEach(function (p) {
+    var sa = s.students.find(function (x) { return x.id === p[0]; });
+    var sb = s.students.find(function (x) { return x.id === p[1]; });
+    if (!sa || !sb || !sa.row || !sb.row || sa.roomId !== sb.roomId) return;
+    var dr = Math.abs(sa.row - sb.row), ds = Math.abs(sa.seat - sb.seat);
+    var sideBySide = dr === 0 && ds === 1;
+    var frontBack = ds === 0 && dr === 1;
+    var diagonal = dr === 1 && ds === 1;
+    if (sideBySide || (near !== 'side' && frontBack) || (near === 'all' && diagonal)) bad.push([sa, sb]);
+  });
+  return bad;
+}
+
+function fixKeepApart(s) {
+  for (var pass = 0; pass < 4; pass++) {
+    var bad = adjacentPairs(s);
+    if (!bad.length) return;
+    var before = bad.length;
+    for (var b = 0; b < bad.length; b++) {
+      var sb = bad[b][1];
+      var seated = s.students.filter(function (st) { return st.row && st.id !== bad[b][0].id && st.id !== sb.id; });
+      for (var k = 0; k < seated.length; k++) {
+        var other = seated[k];
+        var tmp = { roomId: sb.roomId, row: sb.row, seat: sb.seat };
+        sb.roomId = other.roomId; sb.row = other.row; sb.seat = other.seat;
+        other.roomId = tmp.roomId; other.row = tmp.row; other.seat = tmp.seat;
+        if (adjacentPairs(s).length < before) break;
+        var t2 = { roomId: sb.roomId, row: sb.row, seat: sb.seat };
+        sb.roomId = other.roomId; sb.row = other.row; sb.seat = other.seat;
+        other.roomId = t2.roomId; other.row = t2.row; other.seat = t2.seat;
+      }
+    }
+    if (adjacentPairs(s).length >= before) return;
+  }
+}
+
+function seatingRulesModal() {
+  if (!editor) return;
+  var st = session().settings;
+  openModal('Seating rules for this session',
+    '<p class="muted" style="margin-bottom:12px">These apply the next time you click <b>Generate seating</b>. New sessions start from the defaults in Settings.</p>' +
+    '<div class="form-grid"><div class="form-row"><label>Order</label><select id="r_sort">' + optionsHTML(SORT_OPTIONS, st.sortBy) + '</select></div>' +
+    '<div class="form-row"><label>Spacing</label><select id="r_pattern">' + optionsHTML(PATTERN_OPTIONS, st.pattern) + '</select></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Fill rows</label><select id="r_rowdir">' + optionsHTML(ROWDIR_OPTIONS, st.rowDir) + '</select></div>' +
+    '<div class="form-row"><label>Fill seats</label><select id="r_seatdir">' + optionsHTML(SEATDIR_OPTIONS, st.seatDir) + '</select></div></div>' +
+    '<div class="form-row"><label>Keep-apart pairs must not be</label><select id="r_near">' + optionsHTML(NEAR_OPTIONS, st.near) + '</select></div>' +
+    '<p class="muted">Rooms fill in the order shown on Rooms &amp; Layout. Blocked seats are always skipped.</p>',
+    [{ label: 'Save rules', cls: 'btn', fn: function () {
+      if (!editor) return;
+      st.sortBy = document.getElementById('r_sort').value;
+      st.pattern = document.getElementById('r_pattern').value;
+      st.rowDir = document.getElementById('r_rowdir').value;
+      st.seatDir = document.getElementById('r_seatdir').value;
+      st.near = document.getElementById('r_near').value;
+      markDirty(); closeModal(); render();
+      toast('Rules saved — click Generate seating to apply them');
+    } }]);
+}
+
+function setSortBy(v) {
+  if (!editor) return;
+  session().settings.sortBy = v;
+  markDirty(); render();
+}
+
+function reshuffle() {
+  if (!editor) return;
+  var s = session();
+  s.settings.shuffleSeed = Math.floor(Math.random() * 2147483646) + 1;
+  autoSeat();
+}
+
+function viewSeating() {
+  var s = session();
+  if (!s) return noSessionMsg();
+  var conflicts = adjacentPairs(s);
+  var conflictIds = {};
+  conflicts.forEach(function (p) { conflictIds[p[0].id] = 1; conflictIds[p[1].id] = 1; });
+  var unseated = s.students.filter(function (st) { return isSeatedStatus(st.status) && !st.row; }).sort(byName);
+  var roomOpts = '<option value="all"' + (seatingRoomFilter === 'all' ? ' selected' : '') + '>All rooms</option>' +
+    s.rooms.map(function (r) { return '<option value="' + r.id + '"' + (seatingRoomFilter === r.id ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join('');
+
+  var html = '<div class="view-note">View-only mode — this plan is live and up to date. Use the Print tab for paper copies.</div>' +
+    '<div class="section-head"><div><h2>Seating Plan — ' + esc(s.name) + '</h2>' +
+    '<p>Generate seating automatically, then click any two seats to swap those students, or click a student and then an empty seat to move them.</p></div></div>' +
+    '<div class="seating-toolbar">' +
+    '<span class="editor-only" style="display:contents"><button class="btn gold" onclick="autoSeat()">Generate seating</button>' +
+    '<label style="margin:0">Order</label><select onchange="setSortBy(this.value)">' + optionsHTML(SORT_OPTIONS, s.settings.sortBy) + '</select>' +
+    (s.settings.sortBy === 'random' ? '<button class="btn secondary" onclick="reshuffle()">Reshuffle</button>' : '') +
+    '<button class="btn secondary" onclick="seatingRulesModal()">Seating rules</button>' +
+    '<button class="btn secondary" onclick="keepApartModal()">Keep-apart pairs (' + s.settings.keepApart.length + ')</button>' +
+    '<button class="btn secondary" onclick="clearSeatsConfirm()">Clear all seats</button>' +
+    '<span class="tb-divider"></span></span>' +
+    '<label style="margin:0">Show</label><select onchange="seatingRoomFilter=this.value;render()">' + roomOpts + '</select>' +
+    (conflicts.length ? '<span class="pill withdrawn">' + conflicts.length + ' keep-apart conflict' + (conflicts.length > 1 ? 's' : '') + ' — highlighted red</span>' : '') + '</div>';
+
+  if (unseated.length) {
+    html += '<div class="unseated-panel editor-only"><h4>' + unseated.length + ' student' + (unseated.length > 1 ? 's' : '') + ' without a seat — click one, then click an empty seat</h4>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:6px">' + unseated.map(function (st) {
+        return '<span class="chip' + (selectedSeat && selectedSeat.studentId === st.id ? ' selected' : '') + '" onclick="pickUnseated(\'' + st.id + '\')">' + esc(st.first) + ' <b>' + esc(st.last) + '</b></span>';
+      }).join('') + '</div></div>';
+  }
+
+  var rooms = s.rooms.filter(function (r) { return seatingRoomFilter === 'all' || r.id === seatingRoomFilter; });
+  if (!rooms.length) html += '<div class="empty-msg">No rooms set up yet. Editors: add rooms in <b>Rooms &amp; Layout</b>.</div>';
+
+  rooms.forEach(function (r) {
+    var inRoom = s.students.filter(function (st) { return st.roomId === r.id; });
+    html += '<div class="room-banner ' + esc(r.purpose) + '"><h3>' + esc(r.name) + '</h3><span>' + inRoom.length + ' students' +
+      (r.kind === 'seated' ? ' &middot; ' + r.rows + ' &times; ' + r.seatsPerRow : '') +
+      (r.layout && r.layout.supervisor ? ' &middot; Supervisor: ' + esc(r.layout.supervisor) : '') + '</span></div>';
+    if (r.kind === 'seated') {
+      var grid = {};
+      inRoom.forEach(function (st) { if (st.row) grid[st.row + '_' + st.seat] = st; });
+      var t = '<div class="seat-grid-wrap"><table class="seat-table"><thead><tr><th></th>';
+      for (var row = 1; row <= r.rows; row++) t += '<th>Row ' + esc(rowLabel(r, row)) + '</th>';
+      t += '</tr></thead><tbody>';
+      for (var seat = 1; seat <= r.seatsPerRow; seat++) {
+        t += '<tr><th>Seat ' + esc(seatLabel(r, seat)) + '</th>';
+        for (var row2 = 1; row2 <= r.rows; row2++) {
+          var blk = r.layout && r.layout.blocked[row2 + '_' + seat];
+          if (blk) { t += '<td class="seat-cell blocked ' + blk + '" title="' + (blk === 'aisle' ? 'Aisle' : 'Unusable seat') + '"></td>'; continue; }
+          var st2 = grid[row2 + '_' + seat];
+          var cls = 'seat-cell';
+          if (st2 && selectedSeat && selectedSeat.studentId === st2.id) cls += ' selected';
+          if (st2 && conflictIds[st2.id]) cls += ' conflict';
+          t += '<td class="' + cls + '" onclick="seatClick(\'' + r.id + '\',' + row2 + ',' + seat + ')"' +
+            (st2 ? ' title="' + esc(st2.first + ' ' + st2.last + (st2.klass ? ' - ' + st2.klass : '') + (st2.arrangements ? ' - ' + st2.arrangements : '')) + '"' : '') + '>' +
+            (st2 ? '<span class="sc-first">' + esc(st2.first) + '</span><span class="sc-lastn">' + esc(st2.last) + '</span>' : '') + '</td>';
+        }
+        t += '</tr>';
+      }
+      html += t + '</tbody></table></div>';
+    } else {
+      html += '<div class="chip-list">' + (inRoom.slice().sort(byName).map(function (st) {
+        return '<span class="chip">' + esc(st.first) + ' <b>' + esc(st.last) + '</b> <span class="muted">&middot; ' + esc(statusLabel(st.status)) + '</span></span>';
+      }).join('') || '<span class="muted">Nobody assigned</span>') + '</div>';
+    }
+  });
+  return html;
+}
+
+function pickUnseated(id) {
+  if (!editor) return;
+  selectedSeat = selectedSeat && selectedSeat.studentId === id ? null : { studentId: id };
+  render();
+}
+
+function seatClick(roomId, row, seat) {
+  if (!editor) return;
+  var s = session();
+  var room = s.rooms.find(function (x) { return x.id === roomId; });
+  if (!room || seatBlocked(room, row, seat)) { toast('That seat is blocked — change it in Rooms & Layout', true); return; }
+  var here = s.students.find(function (st) { return st.roomId === roomId && st.row === row && st.seat === seat; });
+  if (!selectedSeat) {
+    if (here) { selectedSeat = { studentId: here.id }; render(); }
+    return;
+  }
+  var moving = s.students.find(function (st) { return st.id === selectedSeat.studentId; });
+  if (!moving) { selectedSeat = null; render(); return; }
+  if (here && here.id === moving.id) { selectedSeat = null; render(); return; }
+  var from = { roomId: moving.roomId, row: moving.row, seat: moving.seat };
+  moving.roomId = roomId; moving.row = row; moving.seat = seat;
+  if (here) { here.roomId = from.roomId; here.row = from.row; here.seat = from.seat; }
+  selectedSeat = null;
+  markDirty(); render();
+  toast(here ? 'Swapped ' + moving.last + ' and ' + here.last : 'Moved ' + moving.first + ' ' + moving.last + ' to Row ' + rowLabel(room, row) + ', Seat ' + seatLabel(room, seat));
+}
+
+function clearSeatsConfirm() {
+  if (!editor) return;
+  openModal('Clear all seats?', '<p>Removes every seat assignment in this session. Students stay on the list and you can regenerate at any time.</p>',
+    [{ label: 'Clear seats', cls: 'btn danger', fn: function () {
+      if (!editor) return;
+      var s = session();
+      s.students.forEach(function (st) { if (isSeatedStatus(st.status)) { st.roomId = null; st.row = null; st.seat = null; } });
+      markDirty(); closeModal(); render();
+    } }]);
+}
+
+var NEAR_TEXT = { side: 'side by side', cross: 'side by side, or front and back', all: 'in any of the 8 surrounding seats' };
+
+function keepApartModal() {
+  if (!editor) return;
+  var s = session();
+  var opts = s.students.filter(function (st) { return isSeatedStatus(st.status); }).sort(byName)
+    .map(function (st) { return '<option value="' + st.id + '">' + esc(st.last) + ', ' + esc(st.first) + '</option>'; }).join('');
+  var pairs = s.settings.keepApart.map(function (p, i) {
+    var a = s.students.find(function (x) { return x.id === p[0]; });
+    var b = s.students.find(function (x) { return x.id === p[1]; });
+    if (!a || !b) return '';
+    return '<div class="ka-row"><span class="chip">' + esc(a.last) + ', ' + esc(a.first) + '</span> &harr; ' +
+      '<span class="chip">' + esc(b.last) + ', ' + esc(b.first) + '</span>' +
+      (p[2] ? '<span class="muted ka-reason">' + esc(p[2]) + '</span>' : '') +
+      '<button class="btn small danger" onclick="removeKA(' + i + ')">&#10005;</button></div>';
+  }).join('');
+  openModal('Keep-apart pairs',
+    '<p class="muted" style="margin-bottom:12px">These pairs are never seated ' + NEAR_TEXT[s.settings.near || 'cross'] + ' (change this under <b>Seating rules</b>). Applied when you generate seating; any conflict shows red on the plan.</p>' +
+    (pairs || '<p class="muted">No pairs yet.</p>') +
+    '<div class="ka-row" style="margin-top:14px"><select id="ka_a" style="flex:1">' + opts + '</select>' +
+    '<select id="ka_b" style="flex:1">' + opts + '</select>' +
+    '<button class="btn small" onclick="addKA()">Add pair</button></div>' +
+    '<div class="form-row" style="margin-top:8px"><input type="text" id="ka_reason" placeholder="Reason (optional, editors only see this)" style="width:100%"></div>', [], true);
+}
+
+function addKA() {
+  if (!editor) return;
+  var s = session();
+  var a = document.getElementById('ka_a').value, b = document.getElementById('ka_b').value;
+  var reason = (document.getElementById('ka_reason') || { value: '' }).value.trim();
+  if (!a || !b || a === b) { toast('Pick two different students', true); return; }
+  var dupe = s.settings.keepApart.some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); });
+  if (dupe) { toast('That pair already exists', true); return; }
+  s.settings.keepApart.push(reason ? [a, b, reason] : [a, b]);
+  markDirty(); keepApartModal();
+}
+
+function removeKA(i) {
+  if (!editor) return;
+  session().settings.keepApart.splice(i, 1);
+  markDirty(); keepApartModal();
+}
+
+/* ===================== VIEW: SETTINGS (editors) =====================
+   School-wide settings. Edits go into settingsDraft and only reach
+   DB.config when "Save settings" passes validation, so a half-finished
+   change never affects the plan. Saving is version-checked like
+   sessions (see saveConfigNow in part2_core.js).
+   ================================================================ */
+var LOGO_MAX_CHARS = 40000;   // a Google Sheets cell holds 50,000 characters
+
+function validLogo(src) { return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(String(src || '')); }
+
+/* Apply school name, tagline, accent colour and logo to the page. */
+function applyBranding() {
+  if (!DB || !DB.config) return;
+  var sc = cfg().school;
+  document.title = sc.name + ' — Exam Seating Manager';
+  var sub = document.getElementById('brandSub');
+  if (sub) sub.innerHTML = esc(sc.name) + (sc.tagline ? ' &middot; ' + esc(sc.tagline) : '');
+  var logo = document.getElementById('brandLogo');
+  if (logo) {
+    if (validLogo(sc.logo)) { logo.src = sc.logo; logo.style.display = ''; }
+    else { logo.removeAttribute('src'); logo.style.display = 'none'; }
+  }
+  var root = document.documentElement.style, head = document.querySelector('header');
+  var a = isHex(sc.accent) ? sc.accent.toLowerCase() : DEFAULT_ACCENT;
+  if (a === DEFAULT_ACCENT) {
+    root.removeProperty('--navy'); root.removeProperty('--blue');
+    if (head) head.style.background = '';
+  } else {
+    root.setProperty('--navy', a); root.setProperty('--blue', mixHex(a, '#ffffff', 0.15));
+    if (head) head.style.background = 'linear-gradient(135deg, ' + mixHex(a, '#000000', 0.2) + ' 0%, ' + a + ' 60%, ' + mixHex(a, '#ffffff', 0.15) + ' 100%)';
+  }
+}
+function mixHex(a, b, t) {
+  var x = hexToRgb(a), y = hexToRgb(b);
+  return '#' + x.map(function (v, i) { return ('0' + Math.round(v + (y[i] - v) * t).toString(16)).slice(-2); }).join('');
+}
+
+function draft() {
+  if (!settingsDraft) settingsDraft = clone(cfg());
+  return settingsDraft;
+}
+function draftDirty() { return settingsDraft && JSON.stringify(settingsDraft) !== JSON.stringify(cfg()); }
+
+/* Generic setter used by inputs: path like "school.name" or "statuses.2.label". */
+function setDraft(path, value) {
+  if (!editor) return;
+  var parts = path.split('.'), o = draft();
+  for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  o[parts[parts.length - 1]] = value;
+  var bar = document.getElementById('settingsBar');
+  if (bar) bar.className = 'settings-bar' + (draftDirty() ? ' dirty' : '');
+}
+function inputAttr(path, val, type) {
+  return ' value="' + esc(val == null ? '' : val) + '" onchange="setDraft(\'' + path + '\', this.' + (type === 'check' ? 'checked' : 'value') + ')"';
+}
+
+function viewSettings() {
+  if (!editor) return '<div class="empty-msg">Settings are for exam coordinators. Use "Editor sign in" (top right).</div>';
+  var d = draft();
+  var html = '<div class="section-head"><div><h2>Settings</h2><p>Shared by every editor and every session. Nothing changes until you click <b>Save settings</b>.</p></div></div>';
+  if (remote() && !backendHasSettings) {
+    html += '<div class="warn-box">Your shared Google Sheet needs a one-off update before settings can be saved: paste in the new <b>Code.gs</b>, run <b>setup</b>, then publish a new version (SETUP_GUIDE.md, "Updating an existing install"). Until then the app uses its standard settings.</div>';
+  }
+
+  // ---- school & branding ----
+  html += '<div class="set-card"><h3>School &amp; branding</h3>' +
+    '<div class="form-grid"><div class="form-row"><label>School name</label><input type="text"' + inputAttr('school.name', d.school.name) + '></div>' +
+    '<div class="form-row"><label>Header line</label><input type="text"' + inputAttr('school.tagline', d.school.tagline) + '></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Accent colour</label><input type="color"' + inputAttr('school.accent', d.school.accent) + '> ' +
+    '<button class="btn small secondary" onclick="setDraft(\'school.accent\',DEFAULT_ACCENT);render()">Reset colour</button></div>' +
+    '<div class="form-row"><label>Logo (PNG or JPG, shown in the header and on printouts)</label>' +
+    (validLogo(d.school.logo) ? '<img src="' + esc(d.school.logo) + '" alt="" class="logo-preview"> <button class="btn small danger" onclick="setDraft(\'school.logo\',\'\');render()">Remove logo</button> ' : '') +
+    '<button class="btn small secondary" onclick="pickLogo()">' + (d.school.logo ? 'Replace' : 'Choose') + ' logo</button></div></div></div>';
+
+  // ---- room types ----
+  html += '<div class="set-card"><h3>Room types</h3><p class="muted">Every room has a type. <b>Seat grid</b> rooms are filled by Generate seating; <b>list</b> rooms just hold names. A type with a print title gets its own sheet on the Print tab.</p>' +
+    '<table class="set-table"><thead><tr><th>Name</th><th>Layout</th><th>Print title (blank = no sheet)</th><th></th></tr></thead><tbody>' +
+    d.purposes.map(function (p, i) {
+      return '<tr><td><input type="text"' + inputAttr('purposes.' + i + '.label', p.label) + '></td>' +
+        '<td><select onchange="setDraft(\'purposes.' + i + '.layout\',this.value)">' + optionsHTML([['seated', 'Seat grid'], ['list', 'List']], p.layout) + '</select></td>' +
+        '<td><input type="text"' + inputAttr('purposes.' + i + '.printTitle', p.printTitle) + '></td>' +
+        '<td class="set-actions">' + orderButtons('purposes', i, d.purposes.length) +
+        '<button class="btn small danger" onclick="removePurpose(' + i + ')">&#10005;</button></td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<button class="btn small secondary" onclick="addPurpose()">+ Add room type</button></div>';
+
+  // ---- statuses ----
+  var purposeOpts = function (sel) { return d.purposes.map(function (p) { return [p.id, p.label]; }); };
+  html += '<div class="set-card"><h3>Statuses</h3><p class="muted">Each status sends students to a room type. The <b>first</b> status is the default for new and imported students. Import words: if a spreadsheet status cell contains any of them (comma-separated), that status is used.</p>' +
+    '<table class="set-table"><thead><tr><th>Name</th><th>Colour</th><th>Goes to</th><th>Import words</th><th></th></tr></thead><tbody>' +
+    d.statuses.map(function (x, i) {
+      return '<tr><td><input type="text"' + inputAttr('statuses.' + i + '.label', x.label) + '></td>' +
+        '<td><input type="color"' + inputAttr('statuses.' + i + '.color', x.color) + '></td>' +
+        '<td><select onchange="setDraft(\'statuses.' + i + '.purpose\',this.value)">' + optionsHTML(purposeOpts(), x.purpose) + '</select></td>' +
+        '<td><input type="text" placeholder="e.g. special, provision"' + inputAttr('statuses.' + i + '.keywords', x.keywords) + '></td>' +
+        '<td class="set-actions">' + orderButtons('statuses', i, d.statuses.length) +
+        '<button class="btn small danger" onclick="removeStatus(' + i + ')">&#10005;</button></td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<button class="btn small secondary" onclick="addStatus()">+ Add status</button></div>';
+
+  // ---- seating defaults ----
+  var S = d.seating;
+  html += '<div class="set-card"><h3>Seating defaults for new sessions</h3><p class="muted">Existing sessions keep their own rules (Seating Plan &rarr; Seating rules).</p>' +
+    '<div class="form-grid"><div class="form-row"><label>Order</label><select onchange="setDraft(\'seating.sortBy\',this.value)">' + optionsHTML(SORT_OPTIONS, S.sortBy) + '</select></div>' +
+    '<div class="form-row"><label>Spacing</label><select onchange="setDraft(\'seating.pattern\',this.value)">' + optionsHTML(PATTERN_OPTIONS, S.pattern) + '</select></div></div>' +
+    '<div class="form-grid"><div class="form-row"><label>Fill rows</label><select onchange="setDraft(\'seating.rowDir\',this.value)">' + optionsHTML(ROWDIR_OPTIONS, S.rowDir) + '</select></div>' +
+    '<div class="form-row"><label>Fill seats</label><select onchange="setDraft(\'seating.seatDir\',this.value)">' + optionsHTML(SEATDIR_OPTIONS, S.seatDir) + '</select></div></div>' +
+    '<div class="form-row"><label>Keep-apart pairs must not be</label><select onchange="setDraft(\'seating.near\',this.value)">' + optionsHTML(NEAR_OPTIONS, S.near) + '</select></div></div>';
+
+  // ---- print ----
+  var P = d.print;
+  var colBoxes = function (key) {
+    return Object.keys(PRINT_COLS).map(function (c) {
+      return '<label class="check"><input type="checkbox"' + (P[key].indexOf(c) >= 0 ? ' checked' : '') + ' onchange="toggleCol(\'' + key + '\',\'' + c + '\',this.checked)"> ' + PRINT_COLS[c][0] + '</label>';
+    }).join('');
+  };
+  html += '<div class="set-card"><h3>Print</h3>' +
+    '<div class="form-grid"><div class="form-row"><label>Seat grids</label><select onchange="setDraft(\'print.gridOrientation\',this.value)">' + optionsHTML([['landscape', 'Landscape'], ['portrait', 'Portrait']], P.gridOrientation) + '</select></div>' +
+    '<div class="form-row"><label>Lists</label><select onchange="setDraft(\'print.listOrientation\',this.value)">' + optionsHTML([['portrait', 'Portrait'], ['landscape', 'Landscape']], P.listOrientation) + '</select></div></div>' +
+    '<div class="form-row"><label>Master list columns</label><div class="checks">' + colBoxes('masterCols') + '</div></div>' +
+    '<div class="form-row"><label>Room-type list columns (Arrangements is added automatically when anyone has some)</label><div class="checks">' + colBoxes('listCols') + '</div></div>' +
+    '<div class="form-row"><label>Header lines</label><div class="checks">' +
+    '<label class="check"><input type="checkbox"' + (P.showSupervisor ? ' checked' : '') + ' onchange="setDraft(\'print.showSupervisor\',this.checked)"> Room supervisor (set per room)</label>' +
+    '<label class="check"><input type="checkbox"' + (P.showTimes ? ' checked' : '') + ' onchange="setDraft(\'print.showTimes\',this.checked)"> Start and finish times (set per session)</label></div></div>' +
+    '<div class="form-row"><label>Instructions line on every sheet (optional)</label><input type="text" style="width:100%" placeholder="e.g. Phones off and in bags at the front"' + inputAttr('print.instructions', P.instructions) + '></div></div>';
+
+  html += '<div id="settingsBar" class="settings-bar' + (draftDirty() ? ' dirty' : '') + '"><span class="muted">Unsaved changes</span>' +
+    '<button class="btn secondary" onclick="discardSettings()">Discard changes</button>' +
+    '<button class="btn" onclick="saveSettings()">Save settings</button></div>';
+  return html;
+}
+
+function orderButtons(list, i, n) {
+  return '<button class="btn small secondary" onclick="moveDraft(\'' + list + '\',' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
+    '<button class="btn small secondary" onclick="moveDraft(\'' + list + '\',' + i + ',1)"' + (i === n - 1 ? ' disabled' : '') + '>&#9660;</button>';
+}
+function moveDraft(list, i, dir) {
+  if (!editor) return;
+  var a = draft()[list], j = i + dir;
+  if (j < 0 || j >= a.length) return;
+  var t = a[i]; a[i] = a[j]; a[j] = t;
+  render();
+}
+function toggleCol(key, col, on) {
+  if (!editor) return;
+  var P = draft().print;
+  P[key] = Object.keys(PRINT_COLS).filter(function (c) { return c === col ? on : P[key].indexOf(c) >= 0; });
+  setDraft('print.' + key, P[key]);
+}
+
+function addPurpose() {
+  if (!editor) return;
+  draft().purposes.push({ id: 'p_' + uid(), label: 'New room type', layout: 'list', printTitle: '' });
+  render();
+}
+function addStatus() {
+  if (!editor) return;
+  var d = draft();
+  var listP = d.purposes.find(function (p) { return p.layout !== 'seated'; }) || d.purposes[0];
+  d.statuses.push({ id: 's_' + uid(), label: 'New status', purpose: listP.id, color: '#6b7a99', keywords: '' });
+  render();
+}
+
+/* Everything that might use a status or room type, across ALL sessions
+   (remote sessions load lazily, so load them first). */
+async function usageAcrossSessions(test) {
+  if (remote()) {
+    toast('Checking every session…');
+    try { await ensureAllLoaded(); }
+    catch (e) { toast('Could not check every session: ' + e.message + ' — try again', true); return null; }
+  }
+  var hits = [];
+  DB.sessions.forEach(function (s) {
+    var n = test(s);
+    if (n) hits.push(s.name + ' (' + n + ')');
+  });
+  return hits;
+}
+
+async function removeStatus(i) {
+  if (!editor) return;
+  var d = draft(), x = d.statuses[i];
+  if (d.statuses.length === 1) { toast('Keep at least one status', true); return; }
+  var hits = await usageAcrossSessions(function (s) { return s.students.filter(function (st) { return st.status === x.id; }).length; });
+  if (hits === null) return;
+  if (hits.length) {
+    openModal('Status still in use', '<p><b>' + esc(x.label) + '</b> is still given to students in: ' + esc(hits.join(', ')) +
+      '.</p><p style="margin-top:8px">Change those students to another status first (Students &rarr; Edit), then delete it.</p>', []);
+    return;
+  }
+  d.statuses.splice(i, 1);
+  render();
+}
+
+async function removePurpose(i) {
+  if (!editor) return;
+  var d = draft(), p = d.purposes[i];
+  if (d.purposes.length === 1) { toast('Keep at least one room type', true); return; }
+  var users = d.statuses.filter(function (x) { return x.purpose === p.id; }).map(function (x) { return x.label; });
+  if (users.length) { toast('Statuses still go to "' + p.label + '": ' + users.join(', ') + '. Point them at another room type first.', true); return; }
+  var hits = await usageAcrossSessions(function (s) { return s.rooms.filter(function (r) { return r.purpose === p.id; }).length; });
+  if (hits === null) return;
+  if (hits.length) {
+    openModal('Room type still in use', '<p>Rooms of type <b>' + esc(p.label) + '</b> exist in: ' + esc(hits.join(', ')) +
+      '.</p><p style="margin-top:8px">Change or delete those rooms first (Rooms &amp; Layout).</p>', []);
+    return;
+  }
+  d.purposes.splice(i, 1);
+  render();
+}
+
+function pickLogo() {
+  if (!editor) return;
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/png,image/jpeg';
+  inp.onchange = function () { if (inp.files[0]) loadLogo(inp.files[0]); };
+  inp.click();
+}
+/* Shrink the logo in the browser so it fits in one Sheet cell. */
+function loadLogo(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var img = new Image();
+    img.onload = function () {
+      var scale = Math.min(1, 96 / img.height, 360 / img.width);
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * scale)); c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      var data = c.toDataURL('image/png');
+      if (data.length > LOGO_MAX_CHARS) {
+        var g = c.getContext('2d'); g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+        data = c.toDataURL('image/jpeg', 0.8);
+      }
+      if (data.length > LOGO_MAX_CHARS) { toast('That logo is too detailed to store. Try a simpler or smaller image.', true); return; }
+      setDraft('school.logo', data); render();
+    };
+    img.onerror = function () { toast('Could not read that image. Use a PNG or JPG file.', true); };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function discardSettings() {
+  if (!editor) return;
+  settingsDraft = null; render();
+  toast('Changes discarded');
+}
+
+function validateDraft(d) {
+  if (!String(d.school.name || '').trim()) return 'Enter the school name.';
+  if (!isHex(d.school.accent)) return 'The accent colour is not valid.';
+  if (d.school.logo && !validLogo(d.school.logo)) return 'The logo is not a valid image. Remove it and choose it again.';
+  var seen = {};
+  for (var i = 0; i < d.purposes.length; i++) {
+    var p = d.purposes[i], k = String(p.label || '').trim().toLowerCase();
+    if (!k) return 'Every room type needs a name.';
+    if (seen['p' + k]) return 'Two room types are both called "' + p.label + '". Give each a different name.';
+    seen['p' + k] = 1;
+    if (p.layout !== 'seated' && p.layout !== 'list') p.layout = 'list';
+  }
+  for (var j = 0; j < d.statuses.length; j++) {
+    var x = d.statuses[j], ks = String(x.label || '').trim().toLowerCase();
+    if (!ks) return 'Every status needs a name.';
+    if (seen['s' + ks]) return 'Two statuses are both called "' + x.label + '". Give each a different name.';
+    seen['s' + ks] = 1;
+    if (!isHex(x.color)) return 'The colour for "' + x.label + '" is not valid.';
+    if (!d.purposes.some(function (p) { return p.id === x.purpose; })) return 'Choose a room type for "' + x.label + '".';
+  }
+  if (!d.statuses.length) return 'Keep at least one status.';
+  if (!d.purposes.length) return 'Keep at least one room type.';
+  return '';
+}
+
+async function saveSettings() {
+  if (!editor) return;
+  var d = draft();
+  d.school.name = d.school.name.trim();
+  d.purposes.forEach(function (p) { p.label = p.label.trim(); p.printTitle = String(p.printTitle || '').trim(); });
+  d.statuses.forEach(function (x) { x.label = x.label.trim(); });
+  var err = validateDraft(d);
+  if (err) { toast(err, true); return; }
+  var before = DB.config;
+  // Built-in room types carry fixed card wording; drop it once their print title is changed.
+  d.purposes.forEach(function (p) {
+    var old = before.purposes.find(function (o) { return o.id === p.id; });
+    if (old && old.printTitle !== p.printTitle) { delete p.printCard; delete p.printDesc; }
+  });
+  DB.config = clone(d);
+  var ok = await saveConfigNow();
+  if (!ok) { DB.config = before; render(); return; }
+  settingsDraft = null;
+  applyBranding();
+  if (routingKey(before) !== routingKey(DB.config)) {
+    if (remote()) { try { await ensureAllLoaded(); } catch (e) { toast('Some sessions could not be updated: ' + e.message + '. Open each one to refresh it.', true); } }
+    await reconcileSessions();
+  }
+  render();
+  toast('Settings saved');
+}
+
+/* After room types or status routing change, put students where the new
+   rules say — only those now in the wrong kind of room move. */
+function routingKey(c) {
+  return JSON.stringify([c.purposes.map(function (p) { return [p.id, p.layout]; }), c.statuses.map(function (x) { return [x.id, x.purpose]; })]);
+}
+async function reconcileSessions() {
+  for (var i = 0; i < DB.sessions.length; i++) {
+    var s = DB.sessions[i];
+    if (!s.loaded && remote()) continue;           // could not be loaded; untouched
+    var snapshot = JSON.stringify([s.rooms, s.students]);
+    normaliseSession(s);
+    s.students.forEach(function (st) {
+      var want = statusPurpose(st.status);
+      var r = st.roomId ? s.rooms.find(function (x) { return x.id === st.roomId; }) : null;
+      if (r && r.purpose === want && (r.kind !== 'seated' || st.row)) return;   // right room (and seated if it's a grid)
+      if (!r && isSeatedStatus(st.status)) return;   // waiting for a seat is fine
+      routeStudent(s, st);
+    });
+    if (JSON.stringify([s.rooms, s.students]) !== snapshot) {
+      if (remote()) await saveSessionNow(s); else lsSet(CONFIG.STORAGE_KEY, JSON.stringify(DB));
+    }
+  }
+}
+
+/* ===================== SAVE / OPEN PLAN FILES =====================
+   "Save to file" downloads everything (settings, room templates, every
+   session with its students, rooms, seats and keep-apart pairs) as one
+   .json file. Anyone can save a copy of what they can see.
+   "Open file" (editors only) loads one back:
+     - local mode: replace everything in this browser, or add the file's
+       sessions alongside the ones already here;
+     - shared mode: add the file's sessions to the shared data as NEW
+       sessions (it never overwrites anyone's existing work).
+   Real student data lives in these files, so they stay on the user's
+   own computer; nothing here sends them anywhere except the app's own
+   backend.
+   ================================================================ */
+var PLAN_FILE_APP = 'Exam Seating Manager';
+var PLAN_FILE_FORMAT = 1;
+var openedPlan = null;   // parsed file waiting for the user to choose replace / add
+
+function planFileName() {
+  var d = new Date();
+  var stamp = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  return (cfg().school.name + ' exam seating ' + stamp).replace(/[^a-z0-9 _-]+/gi, '').replace(/\s+/g, '_') + '.json';
+}
+
+function sessionForFile(s) {
+  var c = clone(s);
+  delete c.loaded; delete c.version;
+  return c;
+}
+
+async function savePlanFile() {
+  if (remote()) {
+    toast('Gathering every session…');
+    try { await ensureAllLoaded(); }
+    catch (e) { toast('Could not load every session to save: ' + e.message + ' — check your connection and try again', true); return; }
+  }
+  var file = {
+    app: PLAN_FILE_APP, format: PLAN_FILE_FORMAT, savedAt: new Date().toISOString(),
+    config: clone(cfg()),
+    templates: clone(DB.templates),
+    sessions: DB.sessions.map(sessionForFile),
+    activeSessionId: DB.activeSessionId
+  };
+  var blob = new Blob([JSON.stringify(file, null, 1)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = planFileName();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  toast('Saved ' + DB.sessions.length + ' session' + (DB.sessions.length === 1 ? '' : 's') + ' to ' + a.download + ' — keep it somewhere private, it has student names');
+}
+
+function openPlanFile() {
+  if (!editor) return;
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = function () { if (inp.files[0]) readPlanFile(inp.files[0]); };
+  inp.click();
+}
+
+/* Check a parsed file is ours and well-formed. Returns an error message or ''. */
+function checkPlanFile(f) {
+  if (!isPlainObj(f) || f.app !== PLAN_FILE_APP) return 'That file is not an Exam Seating plan. Choose a file made with "Save to file".';
+  if (Number(f.format) > PLAN_FILE_FORMAT) return 'That plan was saved by a newer version of the app. Use the latest app to open it.';
+  if (!Array.isArray(f.sessions)) return 'That plan file is damaged (no sessions found).';
+  for (var i = 0; i < f.sessions.length; i++) {
+    var s = f.sessions[i];
+    if (!isPlainObj(s) || !s.name || !Array.isArray(s.students) || !Array.isArray(s.rooms)) return 'That plan file is damaged (session ' + (i + 1) + ' is incomplete).';
+  }
+  return '';
+}
+
+function readPlanFile(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var f;
+    try { f = JSON.parse(e.target.result); }
+    catch (err) { toast('Could not read that file — it is not a saved plan.', true); return; }
+    var err2 = checkPlanFile(f);
+    if (err2) { toast(err2, true); return; }
+    openedPlan = f;
+    var students = f.sessions.reduce(function (n, s) { return n + s.students.length; }, 0);
+    var names = f.sessions.map(function (s) { return esc(s.name); }).join(', ') || 'no sessions';
+    var saved = f.savedAt ? new Date(f.savedAt).toLocaleString() : 'unknown date';
+    var body = '<p>This file has <b>' + f.sessions.length + ' session' + (f.sessions.length === 1 ? '' : 's') + '</b> (' + students + ' students), saved ' + esc(saved) + ':</p>' +
+      '<p class="muted" style="margin:6px 0 12px">' + names + '</p>';
+    var buttons;
+    if (remote()) {
+      body += '<p>They will be <b>added to the shared data as new sessions</b>. Nothing already there is changed.</p>';
+      buttons = [{ label: 'Add sessions', cls: 'btn', fn: function () { applyPlanFile('add'); } }];
+    } else {
+      body += '<p><b>Replace</b> swaps everything in this browser (sessions, settings and templates) for the file. <b>Add</b> keeps what is here and adds the file\'s sessions as copies.</p>';
+      buttons = [{ label: 'Add sessions', cls: 'btn secondary', fn: function () { applyPlanFile('add'); } },
+                 { label: 'Replace everything', cls: 'btn danger', fn: function () { applyPlanFile('replace'); } }];
+    }
+    openModal('Open plan file', body, buttons);
+  };
+  reader.onerror = function () { toast('Could not read that file. Try again.', true); };
+  reader.readAsText(file);
+}
+
+/* Add statuses / room types the file uses that this school's settings lack,
+   so imported students keep their status and rooms keep their type. */
+function mergeMissingSettings(fileConfig) {
+  var fc = migrateConfig(clone(fileConfig || {}));
+  var c = cfg(), added = 0;
+  fc.purposes.forEach(function (p) { if (!c.purposes.some(function (x) { return x.id === p.id; })) { c.purposes.push(p); added++; } });
+  fc.statuses.forEach(function (x) { if (!c.statuses.some(function (y) { return y.id === x.id; })) { c.statuses.push(x); added++; } });
+  return added;
+}
+
+async function applyPlanFile(mode) {
+  if (!editor || !openedPlan) return;
+  var f = openedPlan;
+  openedPlan = null;
+  closeModal();
+  var incoming = f.sessions.map(function (s) { return clone(s); });
+
+  if (mode === 'replace' && !remote()) {
+    DB = migrateDB({ version: 1, config: f.config, templates: clone(f.templates || []), sessions: incoming,
+                     activeSessionId: f.activeSessionId });
+    DB.sessions.forEach(function (s) { s.loaded = true; s.version = 1; });
+    if (!DB.sessions.some(function (s) { return s.id === DB.activeSessionId; })) DB.activeSessionId = DB.sessions.length ? DB.sessions[0].id : null;
+    lsSet(CONFIG.STORAGE_KEY, JSON.stringify(DB));
+    settingsDraft = null; applyBranding(); go('sessions');
+    toast('Plan opened — ' + DB.sessions.length + ' session' + (DB.sessions.length === 1 ? '' : 's') + ' loaded');
+    return;
+  }
+
+  // ADD: every session arrives as a new one, with fresh ids so nothing collides.
+  var settingsAdded = mergeMissingSettings(f.config);
+  if (settingsAdded && remote() && !(await saveConfigNow())) {
+    toast('Sessions not added: the statuses or room types they need could not be saved to Settings.', true);
+    return;
+  }
+  var added = 0;
+  for (var i = 0; i < incoming.length; i++) {
+    var s = incoming[i];
+    var roomIds = {}, stuIds = {};
+    s.rooms.forEach(function (r) { var n = uid(); roomIds[r.id] = n; r.id = n; });
+    s.students.forEach(function (st) { var n = uid(); stuIds[st.id] = n; st.id = n; st.roomId = st.roomId ? roomIds[st.roomId] || null : null; });
+    s.settings = isPlainObj(s.settings) ? s.settings : {};
+    s.settings.keepApart = (s.settings.keepApart || []).filter(function (p) { return stuIds[p[0]] && stuIds[p[1]]; })
+      .map(function (p) { var q = [stuIds[p[0]], stuIds[p[1]]]; if (p[2]) q.push(p[2]); return q; });
+    if (DB.sessions.some(function (x) { return x.name === s.name; })) s.name = s.name + ' (from file)';
+    s.id = uid(); s.version = 1; s.loaded = true;
+    migrateSession(s);
+    if (remote()) {
+      try {
+        var out = await apiPost({ action: 'createSession', password: editorPassword, name: s.name, examDate: s.date || '', yearLevels: s.group || '',
+                                  settingsJson: JSON.stringify(sessionSettingsForSave(s)) });
+        if (!out.ok) throw new Error(out.error || 'create failed');
+        s.id = out.session.sessionId; s.version = Number(out.session.version) || 1;
+        DB.sessions.push(s);
+        if (!(await saveSessionNow(s))) throw new Error('the session was created but its students could not be saved');
+      } catch (e) {
+        toast('Stopped after ' + added + ' session' + (added === 1 ? '' : 's') + ': ' + e.message + ' — check your connection and try again', true);
+        render(); return;
+      }
+    } else {
+      DB.sessions.push(s);
+    }
+    added++;
+  }
+  if (!remote()) lsSet(CONFIG.STORAGE_KEY, JSON.stringify(DB));
+  settingsDraft = null; go('sessions');
+  toast('Added ' + added + ' session' + (added === 1 ? '' : 's') + ' from the file' + (settingsAdded ? ' (and ' + settingsAdded + ' status / room type' + (settingsAdded === 1 ? '' : 's') + ' they use)' : ''));
+}
+
+
+/* ======================= VIEW: LOOKUP ========================= */
+function viewLookup() {
+  return '<div class="section-head"><div><h2>Student Lookup</h2><p>For supervisors on the day — type a name to find a student\'s room and seat instantly.</p></div></div>' +
+    '<div class="lookup-box"><div class="lookup-input-wrap"><span class="lookup-icon">&#128269;</span>' +
+    '<input type="text" class="search-input" id="searchInput" placeholder="Type student name" oninput="doSearch(this.value)" autocomplete="off"></div>' +
+    '<div class="search-results" id="searchResults"><div class="empty-msg" style="border:none;background:none">Start typing to search</div></div></div>';
+}
+
+function doSearch(q) {
+  var s = session();
+  var el = document.getElementById('searchResults');
+  if (!s || !q.trim()) { el.innerHTML = '<div class="empty-msg" style="border:none;background:none">Start typing to search</div>'; return; }
+  var term = q.toLowerCase();
+  var hits = s.students.filter(function (st) { return (st.first + ' ' + st.last).toLowerCase().indexOf(term) >= 0; }).sort(byName).slice(0, 12);
+  if (!hits.length) { el.innerHTML = '<div class="empty-msg" style="border:none;background:none">No students found in this session.</div>'; return; }
+  el.innerHTML = hits.map(function (st) {
+    var cls = isSeatedStatus(st.status) ? '' : esc(pillClass(st.status));
+    var loc = locText(s, st, 'Not yet seated');
+    return '<div class="result-card ' + cls + '"><div><div class="result-first">' + esc(st.first) + (st.klass ? ' &middot; ' + esc(st.klass) : '') + '</div>' +
+      '<div class="result-name">' + esc(st.last) + '</div><div class="result-details">' + loc + '</div></div>' +
+      pillHTML(st.status) + '</div>';
+  }).join('');
+}
+
+/* ======================== VIEW: PRINT ========================= */
+function viewPrint() {
+  var s = session();
+  if (!s) return noSessionMsg();
+  var mains = s.rooms.filter(function (r) { return r.kind === 'seated'; });
+  var roomBtns = mains.map(function (r) {
+    return '<button class="btn secondary" style="margin:3px" onclick="printRoomSheet(\'' + r.id + '\')">' + esc(r.name) + ' seat grid</button>';
+  }).join('');
+  return '<div class="section-head"><div><h2>Print — ' + esc(s.name) + '</h2><p>Everything prints on A4 with a session header. A print dialog opens; choose your printer, or "Save as PDF" to email it.</p></div></div>' +
+    '<div class="print-grid">' +
+    '<div class="print-card"><h3>Supervisor seat grids</h3><p>One grid per main room — the seat-by-seat sheet supervisors use to mark attendance.</p>' + (roomBtns || '<span class="muted">No seated rooms yet.</span>') + '</div>' +
+    '<div class="print-card"><h3>Master list (A&ndash;Z)</h3><p>Every student with their room, row and seat, alphabetical by surname. Post at the entrance.</p><button class="btn secondary" onclick="printMasterList()">Print master list</button></div>' +
+    cfg().purposes.filter(function (p) { return p.printTitle; }).map(function (p) {
+      var names = statusList().filter(function (x) { return x.purpose === p.id; }).map(function (x) { return esc(x.label); }).join(', ');
+      return '<div class="print-card"><h3>' + esc(p.printCard || p.printTitle) + '</h3><p>' + (p.printDesc ? esc(p.printDesc) : 'Students with status: ' + (names || 'none yet') + '.') + '</p>' +
+        '<button class="btn secondary" onclick="printPurposeList(\'' + esc(p.id) + '\')">' + esc(p.printBtn || 'Print list') + '</button></div>';
+    }).join('') +
+    '</div>';
+}
+
+var PRINT_CSS =
+  '* { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+  'body { font-family: "DM Sans", Arial, sans-serif; color: #1a2540; margin: 0; padding: 10mm 8mm; }' +
+  'h1 { font-family: "DM Serif Display", Georgia, serif; font-size: 15pt; color: #0d5c2e; margin: 0; }' +
+  '.sub { font-size: 8pt; color: #666; margin: 2px 0 10px; }' +
+  'table { border-collapse: collapse; width: 100%; table-layout: fixed; }' +
+  'th { background: #0d5c2e; color: white; font-size: 6.5pt; padding: 3px 2px; }' +
+  'td { border: 1px solid #ccc; font-size: 6.5pt; padding: 3px 2px; text-align: center; vertical-align: top; overflow: hidden; }' +
+  'td .f { display: block; color: #777; font-size: 6pt; white-space: nowrap; overflow: hidden; }' +
+  'td .l { display: block; font-weight: 700; text-transform: uppercase; font-size: 6.8pt; white-space: nowrap; overflow: hidden; }' +
+  'th.rowhead { width: 34px; }' +
+  'table.list td { text-align: left; font-size: 8.5pt; padding: 4px 6px; }' +
+  'table.list th { text-align: left; font-size: 8pt; padding: 4px 6px; }';
+
+function printCSS() {
+  var a = cfg().school.accent;
+  return isHex(a) && a.toLowerCase() !== DEFAULT_ACCENT ? PRINT_CSS.split(DEFAULT_ACCENT).join(a) : PRINT_CSS;
+}
+
+function printHTML(title, bodyHtml, portrait) {
+  var page = '@page { size: A4 ' + (portrait ? 'portrait' : 'landscape') + '; margin: 6mm; }';
+  var doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;700&display=swap" rel="stylesheet">' +
+    '<style>' + printCSS() + page + '</style></head><body>' + bodyHtml + '</body></html>';
+  // Hidden iframe: works where window.open() is blocked (sandboxed previews, some SOE browsers).
+  var frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(frame);
+  frame.contentDocument.open();
+  frame.contentDocument.write(doc);
+  frame.contentDocument.close();
+  setTimeout(function () {
+    try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+    catch (e) { toast('Print failed: ' + e.message, true); }
+    setTimeout(function () { frame.remove(); }, 4000);
+  }, 600);
+}
+
+/* Optional lines (logo, times, supervisor, instructions) appear only when set,
+   so with default settings the sheets are exactly as before. */
+function printHeader(title, room) {
+  var s = session(), c = cfg(), P = c.print;
+  var logo = validLogo(c.school.logo) ? '<img src="' + esc(c.school.logo) + '" alt="" style="height:12mm;float:right;margin-left:6mm">' : '';
+  var extra = [];
+  if (P.showTimes && (s.settings.startTime || s.settings.finishTime)) {
+    extra.push('Start ' + esc(s.settings.startTime || '—') + ' &middot; Finish ' + esc(s.settings.finishTime || '—'));
+  }
+  if (P.showSupervisor && room && room.layout && room.layout.supervisor) extra.push('Supervisor: ' + esc(room.layout.supervisor));
+  if (P.instructions) extra.push(esc(P.instructions));
+  return logo + '<h1>' + esc(c.school.name) + ' — ' + esc(title) + '</h1><div class="sub">' + esc(s.name) +
+    (s.group ? ' &middot; ' + esc(s.group) : '') + (s.date ? ' &middot; ' + esc(s.date) : '') +
+    ' &middot; printed ' + new Date().toLocaleDateString() + '</div>' +
+    extra.map(function (x) { return '<div class="sub" style="font-size:9pt;color:#1a2540">' + x + '</div>'; }).join('');
+}
+
+/* Shrink a name's font so it fits its grid box. Width is measured with the
+   print font on a canvas; names that already fit keep the normal size (so
+   default output is unchanged). Returns '' or an inline style. */
+var _fitCanvas = null;
+function fitStyle(text, basePt, availPt, bold, upper) {
+  if (!text) return '';
+  try {
+    _fitCanvas = _fitCanvas || document.createElement('canvas');
+    var g = _fitCanvas.getContext('2d');
+    g.font = (bold ? '700 ' : '400 ') + '100px "DM Sans", Arial, sans-serif';
+    var em = g.measureText(upper ? String(text).toUpperCase() : String(text)).width / 100;
+    var fit = availPt / em * 0.92;                       // small safety margin
+    if (fit >= basePt) return '';
+    return ' style="font-size:' + Math.max(2.5, Math.floor(fit * 10) / 10) + 'pt"';
+  } catch (e) { return ''; }
+}
+/* Usable width of one seat box on the printed grid, in points. */
+function gridCellPt(r, portrait) {
+  var pageMm = portrait ? 210 : 297;
+  var cellMm = (pageMm - 12 - 16 - 9) / r.rows - 1.1;   // page margins, body padding, Seat column, cell padding
+  return cellMm * 72 / 25.4;
+}
+
+function printRoomSheet(roomId) {
+  var s = session();
+  var r = s.rooms.find(function (x) { return x.id === roomId; });
+  var grid = {};
+  s.students.forEach(function (st) { if (st.roomId === roomId && st.row) grid[st.row + '_' + st.seat] = st; });
+  var portrait = cfg().print.gridOrientation === 'portrait';
+  var avail = gridCellPt(r, portrait);
+  var t = '<table><thead><tr><th class="rowhead"></th>';
+  for (var row = 1; row <= r.rows; row++) t += '<th>Row ' + esc(rowLabel(r, row)) + '</th>';
+  t += '</tr></thead><tbody>';
+  for (var seat = 1; seat <= r.seatsPerRow; seat++) {
+    t += '<tr><th class="rowhead">Seat ' + esc(seatLabel(r, seat)) + '</th>';
+    for (var row2 = 1; row2 <= r.rows; row2++) {
+      var blk = seatBlocked(r, row2, seat);
+      if (blk) { t += '<td style="background:#e4e4e4"></td>'; continue; }
+      var st = grid[row2 + '_' + seat];
+      t += '<td>' + (st ? '<span class="f"' + fitStyle(st.first, 6, avail, false, false) + '>' + esc(st.first) + '</span>' +
+                          '<span class="l"' + fitStyle(st.last, 6.8, avail, true, true) + '>' + esc(st.last) + '</span>' : '') + '</td>';
+    }
+    t += '</tr>';
+  }
+  t += '</tbody></table>';
+  var foot = r.layout && r.layout.footer ? '<div style="margin-top:4mm;font-size:8pt;line-height:1.5">' +
+    String(r.layout.footer).split(/\n/).map(esc).join('<br>') + '</div>' : '';
+  printHTML(r.name + ' seat grid', printHeader(r.name + ' Supervisor Sheet', r) + t + foot, portrait);
+}
+
+/* Print columns, chosen in Settings → Print. */
+var PRINT_COLS = {
+  student: ['Student', function (s, st) { return '<b>' + esc(st.last) + '</b>, ' + esc(st.first); }],
+  first: ['First name', function (s, st) { return esc(st.first); }],
+  last: ['Last name', function (s, st) { return '<b>' + esc(st.last) + '</b>'; }],
+  klass: ['Class', function (s, st) { return esc(st.klass || ''); }],
+  status: ['Status', function (s, st) { return esc(statusLabel(st.status)); }],
+  location: ['Location', function (s, st) { return locText(s, st); }],
+  room: ['Room', function (s, st) { return esc(st.roomId ? roomName(s, st.roomId) : '—'); }],
+  row: ['Row', function (s, st) { var r = s.rooms.find(function (x) { return x.id === st.roomId; }); return st.row && r ? '<b>' + esc(rowLabel(r, st.row)) + '</b>' : ''; }],
+  seat: ['Seat', function (s, st) { var r = s.rooms.find(function (x) { return x.id === st.roomId; }); return st.seat && r ? '<b>' + esc(seatLabel(r, st.seat)) + '</b>' : ''; }],
+  arrangements: ['Arrangements', function (s, st) { return esc(st.arrangements || ''); }],
+  notes: ['Notes', function (s, st) { return esc(st.notes || ''); }]
+};
+function validCols(cols) { return (cols || []).filter(function (c) { return PRINT_COLS[c]; }); }
+function listTable(s, list, cols) {
+  return '<table class="list"><thead><tr>' + cols.map(function (c) { return '<th>' + PRINT_COLS[c][0] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    list.map(function (st) { return '<tr>' + cols.map(function (c) { return '<td>' + PRINT_COLS[c][1](s, st) + '</td>'; }).join('') + '</tr>'; }).join('') +
+    '</tbody></table>';
+}
+
+function printMasterList() {
+  var s = session();
+  var cols = validCols(cfg().print.masterCols);
+  if (!cols.length) cols = ['student'];
+  printHTML('Master list', printHeader('Master Student List') + listTable(s, s.students.slice().sort(byName), cols),
+    cfg().print.listOrientation !== 'landscape');
+}
+
+/* One list per room type that has a print title (Settings → Room types). */
+function printPurposeList(purposeId) {
+  var s = session();
+  var p = purposeById(purposeId);
+  var title = p.printTitle || p.label;
+  var list = s.students.filter(function (st) { return statusPurpose(st.status) === purposeId; }).sort(byName);
+  var cols = validCols(cfg().print.listCols);
+  if (!cols.length) cols = ['student'];
+  if (cols.indexOf('arrangements') < 0 && list.some(function (st) { return st.arrangements; })) cols = cols.concat(['arrangements']);
+  printHTML(title, printHeader(title) +
+    (list.length ? listTable(s, list, cols) : '<p>No students in this category.</p>'), cfg().print.listOrientation !== 'landscape');
+}
+
+/* ======================== VIEW: HELP ========================== */
+function viewHelp() {
+  var statusNames = statusList().map(function (x) { return x.label; }).join(', ');
+  var listStatusNames = statusList().filter(function (x) { return !isSeatedStatus(x.id); }).map(function (x) { return x.label; }).join(', ');
+  var gridNames = cfg().purposes.filter(function (p) { return p.layout === 'seated'; }).map(function (p) { return p.label; }).join(' / ');
+  var listNames = cfg().purposes.filter(function (p) { return p.layout !== 'seated'; }).map(function (p) { return p.label; }).join(', ');
+  var guides = [
+    ['Set up a new exam (coordinators)',
+      '<ol><li>Click <b>Editor sign in</b> (top right) and enter the editor password.</li>' +
+      '<li>Go to <b>Exam Sessions</b> then <b>+ New session</b>. Name it, set the year group and date. If a room template exists, choose it and your rooms are ready instantly.</li>' +
+      '<li>If you started blank, go to <b>Rooms &amp; Layout</b> and add a seat-grid room (' + esc(gridNames) + ') with its rows and seats, plus a list room for each of: ' + esc(listNames || 'none') + '.</li>' +
+      '<li>Go to <b>Students</b> then <b>Import Excel / CSV</b> and load your class list.</li>' +
+      '<li>Go to <b>Seating Plan</b> and click <b>Generate seating</b>. Done.</li></ol>' +
+      '<div class="tip">Once your rooms are right, save them as a template (Rooms &amp; Layout) so next term takes thirty seconds.</div>'],
+    ['Import a student list from Excel',
+      '<ol><li>Your spreadsheet needs columns for first name and surname. Class and status columns are optional, and headers can be named anything.</li>' +
+      '<li>In <b>Students</b>, click <b>Import Excel / CSV</b> and choose the file (.xlsx, .xls or .csv).</li>' +
+      '<li>The app guesses which column is which — check the dropdowns and fix any it got wrong.</li>' +
+      '<li>Choose <b>Replace</b> for a fresh start or <b>Add</b> to top up the existing list, then click Import.</li></ol>' +
+      '<div class="tip">If a status column contains a status name (' + esc(statusNames) + ') or one of its import words from Settings, the app assigns that status automatically. Optional Arrangements and Notes columns are imported too.</div>'],
+    ['Generate and adjust the seating plan',
+      '<ol><li>In <b>Seating Plan</b>, choose the order and click <b>Generate seating</b>. <b>Seating rules</b> sets spacing (every seat, every second seat, checkerboard) and fill direction.</li>' +
+      '<li>To swap two students, click the first seat then the second. To move someone into an empty seat, click them then click the gap.</li>' +
+      '<li>Students in the yellow panel have no seat yet — click one, then click any empty seat.</li>' +
+      '<li>Students whose status goes to a list room (' + esc(listStatusNames || 'none') + ') are listed under that room automatically.</li></ol>' +
+      '<div class="tip">Regenerating replaces all seats in seat-grid rooms, so do your manual tweaks last.</div>'],
+    ['Keep two students apart',
+      '<ol><li>In <b>Seating Plan</b>, click <b>Keep-apart pairs</b>.</li>' +
+      '<li>Pick the two students and click <b>Add pair</b>. Add as many pairs as you need.</li>' +
+      '<li>Click <b>Generate seating</b> — the app avoids placing them next to each other. <b>Seating rules</b> sets what counts as "next to".</li>' +
+      '<li>If a manual move creates a conflict, both seats turn red with a warning mark so you can fix it.</li></ol>'],
+    ['Change a student\'s status (' + esc(statusNames) + ')',
+      '<ol><li>In <b>Students</b>, click <b>Edit</b> next to the student and change their <b>Status</b>.</li>' +
+      '<li>Their seat is released and they move to the matching room list automatically.</li>' +
+      '<li>Add any <b>special arrangements</b> (reader, extra time) in the same window — they print on the arrangements sheet.</li>' +
+      '<li>Print the paperwork from the <b>Print</b> tab.</li></ol>' +
+      '<div class="tip">Changed your mind? Set them back to "' + esc(statusLabel(defaultStatusId())) + '" and they appear in the unseated panel, ready to place.</div>'],
+    ['Print sheets for exam day',
+      '<ol><li>Go to <b>Print</b>. You do not need to be signed in as an editor.</li>' +
+      '<li>Click the sheet you need — a print dialog opens.</li>' +
+      '<li>Choose a printer, or choose <b>Save as PDF</b> to email it.</li></ol>' +
+      '<div class="tip">Orientation, columns and extra header lines (supervisor, times, instructions) are set in Settings → Print.</div>'],
+    ['For general staff (viewers)',
+      '<p>No sign-in needed — just open the link. You can:</p>' +
+      '<ol><li>Use <b>Lookup</b> to find any student\'s seat on exam day.</li>' +
+      '<li>Browse the <b>Seating Plan</b> — it is always the latest version.</li>' +
+      '<li><b>Print</b> any sheet.</li></ol>' +
+      '<p>You cannot change anything by accident: editing is locked behind the coordinator password.</p>'],
+    ['Something looks wrong?',
+      '<ol><li><b>"Save failed" showing?</b> Check your internet, then make the change again. Tell the exam coordinator if it keeps happening.</li>' +
+      '<li><b>"Someone else saved first"?</b> Another editor changed this session while you had it open. Click <b>Reload latest</b> and redo your change.</li>' +
+      '<li><b>A name is misspelled?</b> An editor fixes it under Students then Edit. In an emergency an editor can also fix it in the Google Sheet (Students tab), then refresh the app.</li>' +
+      '<li><b>Plan looks out of date?</b> Refresh the page — it always loads the latest shared copy.</li>' +
+      '<li><b>Locked out?</b> The exam coordinators hold the editor password; the master copy lives in the Google Apps Script settings.</li></ol>'],
+    ['Save a backup, or move your plan to another computer',
+      '<ol><li>On <b>Exam Sessions</b>, click <b>Save to file</b>. Every session (students, rooms, seats, keep-apart pairs) and your settings download as one file.</li>' +
+      '<li>To load it, sign in as an editor and click <b>Open file</b>. On a single computer you can <b>replace</b> everything or <b>add</b> the file\'s sessions; with shared data, sessions are always <b>added</b> as new ones so nobody\'s work is overwritten.</li></ol>' +
+      '<div class="tip">The file contains student names. Keep it in your school OneDrive or Google Drive, not on a USB stick or in email to outside addresses. Save one before each exam period.</div>'],
+    ['Customise the app (Settings)',
+      '<p>Editors only. Open the <b>Settings</b> tab, make changes, then click <b>Save settings</b>. Settings are shared by every editor and every session.</p>' +
+      '<ol><li><b>School &amp; branding</b> — school name, header line, colour and logo, used on screen and on every printed sheet.</li>' +
+      '<li><b>Room types</b> — seat-grid or list rooms. Give a room type a print title and it gets its own sheet on the Print tab.</li>' +
+      '<li><b>Statuses</b> — rename, recolour, add or remove statuses and choose which room type each one goes to. A status still used by a student cannot be deleted.</li>' +
+      '<li><b>Seating defaults</b> — the rules new sessions start with. Each session can change its own under Seating Plan → Seating rules.</li>' +
+      '<li><b>Print</b> — orientation, columns, and optional supervisor, time and instruction lines.</li></ol>' +
+      '<div class="tip">Blocked seats, aisles, row/seat labels and supervisors are set per room: Rooms &amp; Layout → Edit.</div>']
+  ];
+  return '<div class="section-head"><div><h2>How-to Guides</h2><p>Click a task to see the steps. Written for busy staff — no technical knowledge needed.</p></div></div>' +
+    guides.map(function (g, i) {
+      return '<div class="help-item" id="help' + i + '"><button onclick="document.getElementById(\'help' + i + '\').classList.toggle(\'open\')">' +
+        g[0] + '<span>&#9662;</span></button><div class="help-body">' + g[1] + '</div></div>';
+    }).join('');
+}
+
+/* ========================= SEED DATA ========================== */
+var SEED_RAW = {"9":[{"first":"Aria","last":"ABBOTT","room":"GYM","row":"Row 1","seat":"Seat 1","status":"Completing"},{"first":"Evie","last":"AINSWORTH","room":"GYM","row":"Row 1","seat":"Seat 2","status":"Completing"},{"first":"Henry","last":"AINSWORTH","room":"GYM","row":"Row 1","seat":"Seat 3","status":"Completing"},{"first":"Lola","last":"AINSWORTH","room":"GYM","row":"Row 1","seat":"Seat 4","status":"Completing"},{"first":"Luca","last":"AINSWORTH","room":"GYM","row":"Row 1","seat":"Seat 5","status":"Completing"},{"first":"Ella","last":"ALDER","room":"GYM","row":"Row 1","seat":"Seat 6","status":"Completing"},{"first":"Riley","last":"ALDER","room":"GYM","row":"Row 1","seat":"Seat 7","status":"Completing"},{"first":"Uma","last":"ALDER","room":"GYM","row":"Row 1","seat":"Seat 8","status":"Completing"},{"first":"Jude","last":"ASHBY","room":"GYM","row":"Row 1","seat":"Seat 9","status":"Completing"},{"first":"Blake","last":"ATWELL","room":"BL3","row":"","seat":"","status":"Exemption"},{"first":"Jade","last":"ATWELL","room":"GYM","row":"Row 1","seat":"Seat 10","status":"Completing"},{"first":"Noah","last":"ATWELL","room":"GYM","row":"Row 1","seat":"Seat 11","status":"Completing"},{"first":"Tess","last":"ATWELL","room":"GYM","row":"Row 1","seat":"Seat 12","status":"Completing"},{"first":"Asher","last":"BANNISTER","room":"GYM","row":"Row 1","seat":"Seat 13","status":"Completing"},{"first":"Gus","last":"BANNISTER","room":"GYM","row":"Row 1","seat":"Seat 14","status":"Completing"},{"first":"Nico","last":"BANNISTER","room":"GYM","row":"Row 1","seat":"Seat 15","status":"Completing"},{"first":"Sam","last":"BANNISTER","room":"GYM","row":"Row 1","seat":"Seat 16","status":"Completing"},{"first":"Jack","last":"BARLOW","room":"CDV2","row":"","seat":"","status":"Completing"},{"first":"Phoebe","last":"BARLOW","room":"GYM","row":"Row 1","seat":"Seat 17","status":"Completing"},{"first":"Elsie","last":"BECKETT","room":"GYM","row":"Row 1","seat":"Seat 18","status":"Completing"},{"first":"Harper","last":"BECKETT","room":"GYM","row":"Row 2","seat":"Seat 1","status":"Completing"},{"first":"Asher","last":"BELLAMY","room":"GYM","row":"Row 2","seat":"Seat 2","status":"Completing"},{"first":"Xander","last":"BIRCH","room":"GYM","row":"Row 2","seat":"Seat 3","status":"Completing"},{"first":"Edie","last":"BRAMLEY","room":"GYM","row":"Row 2","seat":"Seat 4","status":"Completing"},{"first":"Nico","last":"BRAMLEY","room":"GYM","row":"Row 2","seat":"Seat 5","status":"Completing"},{"first":"Oscar","last":"BRENNAN","room":"GYM","row":"Row 2","seat":"Seat 6","status":"Completing"},{"first":"Gus","last":"BROOK","room":"CDV2","row":"","seat":"","status":"Completing"},{"first":"Mason","last":"BROOK","room":"GYM","row":"Row 2","seat":"Seat 7","status":"Completing"},{"first":"Reuben","last":"CALLOWAY","room":"GYM","row":"Row 2","seat":"Seat 8","status":"Completing"},{"first":"Tilly","last":"CALLOWAY","room":"GYM","row":"Row 2","seat":"Seat 9","status":"Completing"},{"first":"Leo","last":"CARVER","room":"GYM","row":"Row 2","seat":"Seat 10","status":"Completing"},{"first":"Zac","last":"CARVER","room":"GYM","row":"Row 2","seat":"Seat 11","status":"Completing"},{"first":"Mabel","last":"CHANDLER","room":"GYM","row":"Row 2","seat":"Seat 12","status":"Completing"},{"first":"Ollie","last":"CHANDLER","room":"GYM","row":"Row 2","seat":"Seat 13","status":"Completing"},{"first":"Phoebe","last":"CHANDLER","room":"GYM","row":"Row 2","seat":"Seat 14","status":"Completing"},{"first":"Bella","last":"CLEMENT","room":"GYM","row":"Row 2","seat":"Seat 15","status":"Completing"},{"first":"Georgie","last":"CLEMENT","room":"GYM","row":"Row 2","seat":"Seat 16","status":"Completing"},{"first":"Kit","last":"CLEMENT","room":"GYM","row":"Row 2","seat":"Seat 17","status":"Completing"},{"first":"Beau","last":"COLBY","room":"GYM","row":"Row 2","seat":"Seat 18","status":"Completing"},{"first":"Isla","last":"COLBY","room":"GYM","row":"Row 3","seat":"Seat 1","status":"Completing"},{"first":"Sienna","last":"CROMWELL","room":"GYM","row":"Row 3","seat":"Seat 2","status":"Completing"},{"first":"Vera","last":"CROMWELL","room":"GYM","row":"Row 3","seat":"Seat 3","status":"Completing"},{"first":"Willow","last":"CROMWELL","room":"GYM","row":"Row 3","seat":"Seat 4","status":"Completing"},{"first":"Ivy","last":"DALTON","room":"GYM","row":"Row 3","seat":"Seat 5","status":"Completing"},{"first":"Rosie","last":"DALTON","room":"GYM","row":"Row 3","seat":"Seat 6","status":"Completing"},{"first":"Freya","last":"DARBY","room":"GYM","row":"Row 3","seat":"Seat 7","status":"Completing"},{"first":"Olive","last":"DARBY","room":"GYM","row":"Row 3","seat":"Seat 8","status":"Completing"},{"first":"Pippa","last":"DARBY","room":"GYM","row":"Row 3","seat":"Seat 9","status":"Completing"},{"first":"Tess","last":"DELANEY","room":"GYM","row":"Row 3","seat":"Seat 10","status":"Completing"},{"first":"Paige","last":"DRAPER","room":"GYM","row":"Row 3","seat":"Seat 11","status":"Completing"},{"first":"Wes","last":"DRAPER","room":"GYM","row":"Row 3","seat":"Seat 12","status":"Completing"},{"first":"Nova","last":"DUNMORE","room":"GYM","row":"Row 3","seat":"Seat 13","status":"Completing"},{"first":"Uma","last":"DUNMORE","room":"GYM","row":"Row 3","seat":"Seat 14","status":"Completing"},{"first":"Finn","last":"EASTWOOD","room":"GYM","row":"Row 3","seat":"Seat 15","status":"Completing"},{"first":"Tilly","last":"EASTWOOD","room":"GYM","row":"Row 3","seat":"Seat 16","status":"Completing"},{"first":"Beau","last":"ELLERY","room":"GYM","row":"Row 3","seat":"Seat 17","status":"Completing"},{"first":"Nico","last":"ELLERY","room":"GYM","row":"Row 3","seat":"Seat 18","status":"Completing"},{"first":"Quinn","last":"ELLERY","room":"GYM","row":"Row 4","seat":"Seat 1","status":"Completing"},{"first":"Tess","last":"ELLERY","room":"GYM","row":"Row 4","seat":"Seat 2","status":"Completing"},{"first":"Olive","last":"EMERSON","room":"GYM","row":"Row 4","seat":"Seat 3","status":"Completing"},{"first":"Finn","last":"EVERLY","room":"GYM","row":"Row 4","seat":"Seat 4","status":"Completing"},{"first":"Max","last":"EVERLY","room":"GYM","row":"Row 4","seat":"Seat 5","status":"Completing"},{"first":"Xander","last":"FARROW","room":"GYM","row":"Row 4","seat":"Seat 6","status":"Completing"},{"first":"Finn","last":"FENWICK","room":"GYM","row":"Row 4","seat":"Seat 7","status":"Completing"},{"first":"Edie","last":"FLETCHER","room":"GYM","row":"Row 4","seat":"Seat 8","status":"Completing"},{"first":"Mason","last":"FLETCHER","room":"GYM","row":"Row 4","seat":"Seat 9","status":"Completing"},{"first":"Ruby","last":"FLETCHER","room":"GYM","row":"Row 4","seat":"Seat 10","status":"Completing"},{"first":"Edie","last":"GALLOWAY","room":"GYM","row":"Row 4","seat":"Seat 11","status":"Completing"},{"first":"Arlo","last":"FORSYTH","room":"GYM","row":"Row 4","seat":"Seat 12","status":"Completing"},{"first":"Nell","last":"GALLOWAY","room":"GYM","row":"Row 4","seat":"Seat 13","status":"Completing"},{"first":"Will","last":"GALLOWAY","room":"GYM","row":"Row 4","seat":"Seat 14","status":"Completing"},{"first":"Cleo","last":"GARRICK","room":"GYM","row":"Row 4","seat":"Seat 15","status":"Completing"},{"first":"Freya","last":"GILMORE","room":"GYM","row":"Row 4","seat":"Seat 16","status":"Completing"},{"first":"Nell","last":"GILMORE","room":"GYM","row":"Row 4","seat":"Seat 17","status":"Completing"},{"first":"Caleb","last":"GOODWIN","room":"GYM","row":"Row 4","seat":"Seat 18","status":"Completing"},{"first":"Sky","last":"GILMORE","room":"GYM","row":"Row 5","seat":"Seat 1","status":"Completing"},{"first":"Ella","last":"GOODWIN","room":"GYM","row":"Row 5","seat":"Seat 2","status":"Completing"},{"first":"Orla","last":"GOODWIN","room":"GYM","row":"Row 5","seat":"Seat 3","status":"Completing"},{"first":"Zara","last":"GOODWIN","room":"GYM","row":"Row 5","seat":"Seat 4","status":"Completing"},{"first":"Gus","last":"GRANGER","room":"GYM","row":"Row 5","seat":"Seat 5","status":"Completing"},{"first":"Bella","last":"HADLEY","room":"GYM","row":"Row 5","seat":"Seat 6","status":"Completing"},{"first":"Indie","last":"HADLEY","room":"GYM","row":"Row 5","seat":"Seat 7","status":"Completing"},{"first":"Kit","last":"HADLEY","room":"GYM","row":"Row 5","seat":"Seat 8","status":"Completing"},{"first":"Gus","last":"HALLORAN","room":"GYM","row":"Row 5","seat":"Seat 9","status":"Completing"},{"first":"Paige","last":"HALLORAN","room":"GYM","row":"Row 5","seat":"Seat 10","status":"Completing"},{"first":"Sam","last":"HALLORAN","room":"GYM","row":"Row 5","seat":"Seat 11","status":"Completing"},{"first":"Sky","last":"HALLORAN","room":"GYM","row":"Row 5","seat":"Seat 12","status":"Completing"},{"first":"Zara","last":"HALLORAN","room":"GYM","row":"Row 5","seat":"Seat 13","status":"Completing"},{"first":"Tilly","last":"HARTLEY","room":"GYM","row":"Row 5","seat":"Seat 14","status":"Completing"},{"first":"Edie","last":"HAWTHORNE","room":"GYM","row":"Row 5","seat":"Seat 15","status":"Completing"},{"first":"Phoebe","last":"HAWTHORNE","room":"GYM","row":"Row 5","seat":"Seat 16","status":"Completing"},{"first":"Harper","last":"HOLLOWAY","room":"GYM","row":"Row 5","seat":"Seat 17","status":"Completing"},{"first":"Paige","last":"HOLLOWAY","room":"GYM","row":"Row 6","seat":"Seat 1","status":"Completing"},{"first":"Nell","last":"HOLLOWAY","room":"GYM","row":"Row 5","seat":"Seat 18","status":"Completing"},{"first":"Sadie","last":"HOLLOWAY","room":"GYM","row":"Row 6","seat":"Seat 2","status":"Completing"},{"first":"Remy","last":"HUXLEY","room":"GYM","row":"Row 6","seat":"Seat 3","status":"Completing"},{"first":"Zac","last":"INGRAM","room":"GYM","row":"Row 6","seat":"Seat 4","status":"Completing"},{"first":"Ethan","last":"JARVIS","room":"GYM","row":"Row 6","seat":"Seat 5","status":"Completing"},{"first":"Flora","last":"JARVIS","room":"GYM","row":"Row 6","seat":"Seat 6","status":"Completing"},{"first":"Jade","last":"JARVIS","room":"GYM","row":"Row 6","seat":"Seat 7","status":"Completing"},{"first":"Evie","last":"KEARNEY","room":"GYM","row":"Row 6","seat":"Seat 8","status":"Completing"},{"first":"Maddie","last":"JARVIS","room":"GYM","row":"Row 6","seat":"Seat 9","status":"Completing"},{"first":"Sky","last":"JARVIS","room":"GYM","row":"Row 6","seat":"Seat 10","status":"Completing"},{"first":"Georgie","last":"KEARNEY","room":"GYM","row":"Row 6","seat":"Seat 11","status":"Completing"},{"first":"Zara","last":"KENDALL","room":"GYM","row":"Row 6","seat":"Seat 12","status":"Completing"},{"first":"Xander","last":"KEARNEY","room":"GYM","row":"Row 6","seat":"Seat 13","status":"Completing"},{"first":"Dexter","last":"KINGSLEY","room":"GYM","row":"Row 6","seat":"Seat 14","status":"Completing"},{"first":"Ethan","last":"KINGSLEY","room":"GYM","row":"Row 6","seat":"Seat 15","status":"Completing"},{"first":"Maddie","last":"KINGSLEY","room":"GYM","row":"Row 6","seat":"Seat 16","status":"Completing"},{"first":"Mason","last":"KINGSLEY","room":"GYM","row":"Row 6","seat":"Seat 17","status":"Completing"},{"first":"Mia","last":"LACHLAN","room":"GYM","row":"Row 6","seat":"Seat 18","status":"Completing"},{"first":"Phoebe","last":"LACHLAN","room":"GYM","row":"Row 7","seat":"Seat 1","status":"Completing"},{"first":"Wes","last":"LACHLAN","room":"GYM","row":"Row 7","seat":"Seat 2","status":"Completing"},{"first":"Lachie","last":"LANGFORD","room":"GYM","row":"Row 7","seat":"Seat 3","status":"Completing"},{"first":"Zac","last":"LANGFORD","room":"GYM","row":"Row 7","seat":"Seat 4","status":"Completing"},{"first":"Finn","last":"LARKIN","room":"GYM","row":"Row 7","seat":"Seat 5","status":"Completing"},{"first":"Kit","last":"LARKIN","room":"GYM","row":"Row 7","seat":"Seat 6","status":"Completing"},{"first":"Xander","last":"LARKIN","room":"GYM","row":"Row 7","seat":"Seat 7","status":"Completing"},{"first":"Darcy","last":"LAWSON","room":"GYM","row":"Row 7","seat":"Seat 8","status":"Completing"},{"first":"Finn","last":"LAWSON","room":"GYM","row":"Row 7","seat":"Seat 9","status":"Completing"},{"first":"Noah","last":"LAWSON","room":"GYM","row":"Row 7","seat":"Seat 10","status":"Completing"},{"first":"Evie","last":"LOCKWOOD","room":"GYM","row":"Row 7","seat":"Seat 11","status":"Completing"},{"first":"Lottie","last":"LOCKWOOD","room":"GYM","row":"Row 7","seat":"Seat 12","status":"Completing"},{"first":"Olive","last":"LOCKWOOD","room":"BL3","row":"","seat":"","status":"Exemption"},{"first":"Lottie","last":"LOWELL","room":"GYM","row":"Row 7","seat":"Seat 13","status":"Completing"},{"first":"Mason","last":"LOWELL","room":"GYM","row":"Row 7","seat":"Seat 14","status":"Completing"},{"first":"Yasmin","last":"LOWELL","room":"GYM","row":"Row 7","seat":"Seat 15","status":"Completing"},{"first":"Zac","last":"LOWELL","room":"GYM","row":"Row 7","seat":"Seat 16","status":"Completing"},{"first":"Arlo","last":"MACKAY","room":"GYM","row":"Row 7","seat":"Seat 17","status":"Completing"},{"first":"Lily","last":"MACKAY","room":"GYM","row":"Row 7","seat":"Seat 18","status":"Completing"},{"first":"Hugo","last":"MARLOW","room":"GYM","row":"Row 8","seat":"Seat 1","status":"Completing"},{"first":"Beau","last":"MERRITT","room":"GYM","row":"Row 8","seat":"Seat 2","status":"Completing"},{"first":"Lottie","last":"MERRITT","room":"GYM","row":"Row 8","seat":"Seat 3","status":"Completing"},{"first":"Remy","last":"MORELAND","room":"GYM","row":"Row 8","seat":"Seat 4","status":"Completing"},{"first":"Theo","last":"MORELAND","room":"GYM","row":"Row 8","seat":"Seat 5","status":"Completing"},{"first":"Tilly","last":"MORELAND","room":"GYM","row":"Row 8","seat":"Seat 6","status":"Completing"},{"first":"Zara","last":"NASH","room":"GYM","row":"Row 8","seat":"Seat 7","status":"Completing"},{"first":"Arlo","last":"NEWBURY","room":"GYM","row":"Row 8","seat":"Seat 8","status":"Completing"},{"first":"Harper","last":"NEWBURY","room":"GYM","row":"Row 8","seat":"Seat 9","status":"Completing"},{"first":"Kit","last":"NEWBURY","room":"GYM","row":"Row 8","seat":"Seat 10","status":"Completing"},{"first":"Ollie","last":"NEWBURY","room":"GYM","row":"Row 8","seat":"Seat 11","status":"Completing"},{"first":"Gus","last":"NORWOOD","room":"GYM","row":"Row 8","seat":"Seat 12","status":"Completing"},{"first":"Ruby","last":"NORWOOD","room":"GYM","row":"Row 8","seat":"Seat 13","status":"Completing"},{"first":"Tilly","last":"NORWOOD","room":"GYM","row":"Row 8","seat":"Seat 14","status":"Completing"},{"first":"Georgie","last":"OAKLEY","room":"GYM","row":"Row 8","seat":"Seat 15","status":"Completing"},{"first":"Indie","last":"OAKLEY","room":"GYM","row":"Row 8","seat":"Seat 16","status":"Completing"},{"first":"Harvey","last":"ORMSBY","room":"GYM","row":"Row 8","seat":"Seat 17","status":"Completing"},{"first":"Sienna","last":"ORMSBY","room":"GYM","row":"Row 8","seat":"Seat 18","status":"Completing"},{"first":"Tilly","last":"ORMSBY","room":"GYM","row":"Row 9","seat":"Seat 1","status":"Completing"},{"first":"Ella","last":"PAGET","room":"GYM","row":"Row 9","seat":"Seat 2","status":"Completing"},{"first":"Indie","last":"PAGET","room":"GYM","row":"Row 9","seat":"Seat 3","status":"Completing"},{"first":"Jude","last":"PAGET","room":"GYM","row":"Row 9","seat":"Seat 4","status":"Completing"},{"first":"Nova","last":"PAGET","room":"GYM","row":"Row 9","seat":"Seat 5","status":"Completing"},{"first":"Kai","last":"PEMBERTON","room":"GYM","row":"Row 9","seat":"Seat 6","status":"Completing"},{"first":"Milo","last":"PEMBERTON","room":"GYM","row":"Row 9","seat":"Seat 7","status":"Completing"},{"first":"Phoebe","last":"PEMBERTON","room":"GYM","row":"Row 9","seat":"Seat 8","status":"Completing"},{"first":"Pippa","last":"PEMBERTON","room":"GYM","row":"Row 9","seat":"Seat 9","status":"Completing"},{"first":"Leo","last":"PENROSE","room":"GYM","row":"Row 9","seat":"Seat 10","status":"Completing"},{"first":"Nell","last":"PENROSE","room":"GYM","row":"Row 9","seat":"Seat 11","status":"Completing"},{"first":"Blake","last":"QUILL","room":"GYM","row":"Row 9","seat":"Seat 12","status":"Completing"},{"first":"Georgie","last":"QUILL","room":"GYM","row":"Row 9","seat":"Seat 13","status":"Completing"},{"first":"Jude","last":"QUILL","room":"GYM","row":"Row 9","seat":"Seat 14","status":"Completing"},{"first":"Theo","last":"RADFORD","room":"GYM","row":"Row 9","seat":"Seat 15","status":"Completing"},{"first":"Uma","last":"RADFORD","room":"GYM","row":"Row 9","seat":"Seat 16","status":"Completing"},{"first":"Milo","last":"RAMSAY","room":"GYM","row":"Row 9","seat":"Seat 17","status":"Completing"},{"first":"Lily","last":"REDMOND","room":"GYM","row":"Row 9","seat":"Seat 18","status":"Completing"},{"first":"Pippa","last":"REDMOND","room":"GYM","row":"Row 10","seat":"Seat 1","status":"Completing"},{"first":"Vera","last":"REDMOND","room":"GYM","row":"Row 10","seat":"Seat 2","status":"Completing"},{"first":"Vera","last":"RIDLEY","room":"GYM","row":"Row 10","seat":"Seat 3","status":"Completing"},{"first":"Indie","last":"RUTHERFORD","room":"GYM","row":"Row 10","seat":"Seat 4","status":"Completing"},{"first":"Gus","last":"SADLER","room":"GYM","row":"Row 10","seat":"Seat 5","status":"Completing"},{"first":"Arlo","last":"SEXTON","room":"GYM","row":"Row 10","seat":"Seat 6","status":"Completing"},{"first":"Jade","last":"SHELBY","room":"GYM","row":"Row 10","seat":"Seat 7","status":"Completing"},{"first":"Kai","last":"SHELBY","room":"GYM","row":"Row 10","seat":"Seat 8","status":"Completing"},{"first":"Paige","last":"SHELBY","room":"GYM","row":"Row 10","seat":"Seat 9","status":"Completing"},{"first":"Henry","last":"SOMERSET","room":"GYM","row":"Row 10","seat":"Seat 10","status":"Completing"},{"first":"Reuben","last":"SOMERSET","room":"GYM","row":"Row 10","seat":"Seat 11","status":"Completing"},{"first":"Tilly","last":"SOMERSET","room":"GYM","row":"Row 10","seat":"Seat 12","status":"Completing"},{"first":"Georgie","last":"STANTON","room":"GYM","row":"Row 10","seat":"Seat 13","status":"Completing"},{"first":"Isla","last":"STANTON","room":"GYM","row":"Row 10","seat":"Seat 14","status":"Completing"},{"first":"Beau","last":"SUTTON","room":"GYM","row":"Row 10","seat":"Seat 15","status":"Completing"},{"first":"Mia","last":"SUTTON","room":"GYM","row":"Row 10","seat":"Seat 16","status":"Completing"},{"first":"Olive","last":"SUTTON","room":"GYM","row":"Row 10","seat":"Seat 17","status":"Completing"},{"first":"Lola","last":"TALBOT","room":"GYM","row":"Row 10","seat":"Seat 18","status":"Completing"},{"first":"Theo","last":"TALBOT","room":"GYM","row":"Row 11","seat":"Seat 1","status":"Completing"},{"first":"Vera","last":"TALBOT","room":"GYM","row":"Row 11","seat":"Seat 2","status":"Completing"},{"first":"Yasmin","last":"TALBOT","room":"GYM","row":"Row 11","seat":"Seat 3","status":"Completing"},{"first":"Asher","last":"TENNANT","room":"GYM","row":"Row 11","seat":"Seat 4","status":"Completing"},{"first":"Flora","last":"TENNANT","room":"GYM","row":"Row 11","seat":"Seat 5","status":"Completing"},{"first":"Gus","last":"TENNANT","room":"GYM","row":"Row 11","seat":"Seat 6","status":"Completing"},{"first":"Ollie","last":"TENNANT","room":"GYM","row":"Row 11","seat":"Seat 7","status":"Completing"},{"first":"Lottie","last":"THORNBURY","room":"GYM","row":"Row 11","seat":"Seat 8","status":"Completing"},{"first":"Mason","last":"THORNBURY","room":"GYM","row":"Row 11","seat":"Seat 9","status":"Completing"},{"first":"Nate","last":"THORNBURY","room":"GYM","row":"Row 11","seat":"Seat 10","status":"Completing"},{"first":"Yasmin","last":"THORNBURY","room":"GYM","row":"Row 11","seat":"Seat 11","status":"Completing"},{"first":"Blake","last":"UNDERWOOD","room":"GYM","row":"Row 11","seat":"Seat 12","status":"Completing"},{"first":"Tilly","last":"UNDERWOOD","room":"GYM","row":"Row 11","seat":"Seat 13","status":"Completing"},{"first":"Flora","last":"VANCE","room":"GYM","row":"Row 11","seat":"Seat 14","status":"Completing"},{"first":"Phoebe","last":"VANCE","room":"GYM","row":"Row 11","seat":"Seat 15","status":"Completing"},{"first":"Willow","last":"VANCE","room":"GYM","row":"Row 11","seat":"Seat 16","status":"Completing"},{"first":"Xander","last":"VANCE","room":"GYM","row":"Row 11","seat":"Seat 17","status":"Completing"},{"first":"Eli","last":"VARLEY","room":"GYM","row":"Row 11","seat":"Seat 18","status":"Completing"},{"first":"Elsie","last":"VARLEY","room":"GYM","row":"Row 12","seat":"Seat 1","status":"Completing"},{"first":"Pippa","last":"VARLEY","room":"GYM","row":"Row 12","seat":"Seat 2","status":"Completing"},{"first":"Hugo","last":"WAKEFIELD","room":"GYM","row":"Row 12","seat":"Seat 3","status":"Completing"},{"first":"Theo","last":"WAKEFIELD","room":"GYM","row":"Row 12","seat":"Seat 4","status":"Completing"},{"first":"Eli","last":"WAVERLEY","room":"GYM","row":"Row 12","seat":"Seat 5","status":"Completing"},{"first":"Yasmin","last":"WINSLOW","room":"GYM","row":"Row 12","seat":"Seat 6","status":"Completing"},{"first":"Riley","last":"WHITCOMBE","room":"GYM","row":"Row 12","seat":"Seat 7","status":"Completing"},{"first":"Eli","last":"WREN","room":"GYM","row":"Row 12","seat":"Seat 8","status":"Completing"},{"first":"Arlo","last":"YARDLEY","room":"GYM","row":"Row 12","seat":"Seat 9","status":"Completing"},{"first":"Pippa","last":"YARDLEY","room":"GYM","row":"Row 12","seat":"Seat 10","status":"Completing"},{"first":"Lily","last":"YARDLEY","room":"BL3","row":"","seat":"","status":"Withdrawn"},{"first":"Sienna","last":"YATES","room":"GYM","row":"Row 12","seat":"Seat 11","status":"Completing"},{"first":"Zac","last":"YATES","room":"GYM","row":"Row 12","seat":"Seat 12","status":"Completing"},{"first":"Finn","last":"ZELLER","room":"GYM","row":"Row 12","seat":"Seat 13","status":"Completing"},{"first":"Leo","last":"ZELLER","room":"BL3","row":"","seat":"","status":"Withdrawn"},{"first":"Sky","last":"ZELLER","room":"GYM","row":"Row 12","seat":"Seat 14","status":"Completing"}]};
+
+function buildSeedDB() {
+  var db = { version: 1, sessions: [], templates: [], activeSessionId: null };
+  var tmplRooms = [
+    { name: 'GYM', purpose: 'main', kind: 'seated', rows: 12, seatsPerRow: 18 },
+    { name: 'CDV2', purpose: 'special', kind: 'list' },
+    { name: 'BL3', purpose: 'withdrawn', kind: 'list' }
+  ];
+  db.templates.push({ id: uid(), name: 'NAPLAN standard setup (GYM + CDV2 + BL3)', rooms: JSON.parse(JSON.stringify(tmplRooms)) });
+
+  if (SEED_RAW) {
+    Object.keys(SEED_RAW).forEach(function (yr) {
+      var rooms = JSON.parse(JSON.stringify(tmplRooms)).map(function (r) { r.id = uid(); return r; });
+      var byRoomName = {};
+      rooms.forEach(function (r) { byRoomName[r.name] = r; });
+      var students = SEED_RAW[yr].map(function (x) {
+        var st = { id: uid(), first: x.first, last: x.last, klass: '', status: x.status, roomId: null, row: null, seat: null };
+        var r = byRoomName[x.room];
+        if (r) {
+          // A student sitting in a list room is there for that room's reason.
+          if (r.purpose === 'special' && st.status === 'Completing') st.status = 'Special Provision';
+          if (r.purpose === 'withdrawn' && st.status === 'Completing') st.status = 'Withdrawn';
+          st.roomId = r.id;
+          if (r.kind === 'seated' && x.row) {
+            st.row = parseInt(String(x.row).replace(/\D/g, ''), 10) || null;
+            st.seat = parseInt(String(x.seat).replace(/\D/g, ''), 10) || null;
+          }
+        }
+        return st;
+      });
+      db.sessions.push({
+        id: uid(), name: 'NAPLAN 2026 — Year ' + yr, group: 'Year ' + yr, date: '2026-03-11',
+        version: 1, loaded: true, rooms: rooms, students: students,
+        settings: { sortBy: 'surname', keepApart: [] }
+      });
+    });
+  }
+  db.activeSessionId = db.sessions.length ? db.sessions[0].id : null;
+  return db;
+}
+
+/* =========================== BOOT ============================= */
+(async function boot() {
+  try {
+    await loadDB();
+    applyBranding();
+    render();
+  } catch (e) {
+    document.getElementById('main').innerHTML =
+      '<div class="empty-msg">The app could not start: ' + esc(e.message) + '<br><br>Try refreshing. If it keeps happening, tell the exam coordinator.</div>';
+  }
+})();
+
+</script>
+</body>
+</html>

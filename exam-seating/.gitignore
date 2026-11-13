@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+seating.png
+students.png
+.DS_Store
