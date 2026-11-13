@@ -16,7 +16,7 @@ src/part7_files.js               Save to file / Open file: the whole plan as one
 src/part5_lookup_print_help.js   Lookup, print sheets, how-to guides, seed data, boot (built last)
 src/seed.json                    Local-mode demo data (Year 9 NAPLAN 2026 layout, fictional names)
 build.js                         Concatenates the above into Exam_Seating_Manager.html
-test.py                          Playwright end-to-end suite (99 checks)
+test.py                          Playwright end-to-end suite (103 checks)
 test_backend.js                  Test-only: runs the real Code.gs on an in-memory fake Google Sheet
 test_baseline.json               Test fixture: seats + print HTML from the original (pre-settings) app
 Code.gs                          Google Apps Script backend (authoritative API contract)

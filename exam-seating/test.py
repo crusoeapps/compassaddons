@@ -360,6 +360,7 @@ with sync_playwright() as p:
     q.locator(".mask thead th").nth(1).click()       # whole row 1 -> aisle
     q.select_option("#f_rowlab", "letter")
     q.fill("#f_super", "Ms Lee")
+    q.fill("#f_footer", "Advanced: Row 1\nGeneral: Row 4")
     q.click("#modalFoot button:has-text('Save changes')"); q.wait_for_timeout(400)
     g = q.evaluate("() => { var r = session().rooms[0]; return { n: Object.keys(r.layout.blocked).length, b: r.layout.blocked['3_1'], a: r.layout.blocked['2_1'] }; }")
     check("seat map editor blocks seats and lines", g == {"n": 20, "b": "unusable", "a": "aisle"}, g)
@@ -375,6 +376,7 @@ with sync_playwright() as p:
     check("cannot move into a blocked seat", "blocked" in q.inner_text("#toast") and placements(q) == occupied_before)
     h = grab_print(q, "printRoomSheet(session().rooms[0].id)")
     check("print grid: labels, blocked cells, supervisor", "Row A" in h and "background:#e4e4e4" in h and "Supervisor: Ms Lee" in h)
+    check("grid footer note prints under the grid", "Advanced: Row 1<br>General: Row 4</div>" in h)
     q.evaluate("var d = draft(); d.print.showSupervisor = false; saveSettings()"); q.wait_for_timeout(300)
     check("supervisor line can be turned off", "Supervisor:" not in grab_print(q, "printRoomSheet(session().rooms[0].id)"))
     q.evaluate("moveRoom(session().rooms[0].id, 1)")

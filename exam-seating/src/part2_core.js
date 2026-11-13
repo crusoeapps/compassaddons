@@ -58,7 +58,7 @@ var DEFAULT_CONFIG = {
            masterCols: ['student', 'klass', 'status', 'location'], listCols: ['student', 'klass', 'status', 'room'],
            showSupervisor: true, showTimes: true, instructions: '' }
 };
-var DEFAULT_ROOM_LAYOUT = { rowLabels: 'number', rowFrom: 'start', seatLabels: 'number', seatFrom: 'start', blocked: {}, supervisor: '' };
+var DEFAULT_ROOM_LAYOUT = { rowLabels: 'number', rowFrom: 'start', seatLabels: 'number', seatFrom: 'start', blocked: {}, supervisor: '', footer: '' };
 
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function isPlainObj(o) { return o && typeof o === 'object' && !Array.isArray(o); }

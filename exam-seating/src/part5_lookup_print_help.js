@@ -143,7 +143,9 @@ function printRoomSheet(roomId) {
     t += '</tr>';
   }
   t += '</tbody></table>';
-  printHTML(r.name + ' seat grid', printHeader(r.name + ' Supervisor Sheet', r) + t, portrait);
+  var foot = r.layout && r.layout.footer ? '<div style="margin-top:4mm;font-size:8pt;line-height:1.5">' +
+    String(r.layout.footer).split(/\n/).map(esc).join('<br>') + '</div>' : '';
+  printHTML(r.name + ' seat grid', printHeader(r.name + ' Supervisor Sheet', r) + t + foot, portrait);
 }
 
 /* Print columns, chosen in Settings → Print. */

@@ -8,7 +8,7 @@ and general teaching staff (view-only).
 
 ```bash
 node build.js      # regenerates Exam_Seating_Manager.html from src/
-python3 test.py    # 99 Playwright checks against the built file (needs node too)
+python3 test.py    # 103 Playwright checks against the built file (needs node too)
 ```
 
 Always run both after a change. `test.py` needs `playwright install chromium`

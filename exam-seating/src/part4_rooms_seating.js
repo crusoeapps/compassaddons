@@ -82,6 +82,7 @@ function roomModal(id) {
     '<div class="form-grid">' +
     '<div class="form-row"><label>Row labels</label>' + labelSelect('f_rowlab', L.rowLabels) + fromSelect('f_rowfrom', L.rowFrom, 'Start at the front', 'Start at the back') + '</div>' +
     '<div class="form-row"><label>Seat labels</label>' + labelSelect('f_seatlab', L.seatLabels) + fromSelect('f_seatfrom', L.seatFrom, 'Start at seat 1 side', 'Start at the far side') + '</div></div>' +
+    '<div class="form-row"><label>Note at the bottom of the printed grid (optional)</label><textarea id="f_footer" rows="2" placeholder="e.g. Advanced: Row 1 Seat 1 to Row 3 Seat 11">' + esc(L.footer || '') + '</textarea></div>' +
     '<label>Seat map — click a seat to cycle: open &rarr; aisle &rarr; unusable. Click a Row or Seat heading to block or clear the whole line.</label>' +
     '<div id="maskWrap" class="mask-wrap"></div></div>',
     [{ label: r ? 'Save changes' : 'Add room', cls: 'btn', fn: function () {
@@ -94,6 +95,7 @@ function roomModal(id) {
       var rows = roomDraft.rows, seatsPerRow = roomDraft.seatsPerRow;
       var layout = roomDraft.layout;
       layout.supervisor = document.getElementById('f_super').value.trim();
+      layout.footer = document.getElementById('f_footer').value.trim();
       var target = r || { id: uid() };
       target.name = name; target.purpose = purpose; target.kind = kind; target.rows = rows; target.seatsPerRow = seatsPerRow; target.layout = layout;
       var released = 0;
