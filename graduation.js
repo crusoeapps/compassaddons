@@ -248,6 +248,13 @@ $(document).ready(function() {
   
   function loadTasks(tasks, cycleId, classlist, group) {
     let task = tasks.d.data.filter(t => t.name == "Year 10 Graduation Rubric")[0]
+    // A class without the rubric task used to throw here and leave its section
+    // blank with no explanation.
+    if (!task) {
+      $('<p>').addClass('note group-note').text('No "Year 10 Graduation Rubric" learning task in this class.')
+        .appendTo(`#c${cycleId}.cycle .g${group}.group`)
+      return
+    }
     let year = new Date(task.createdTimestamp).getUTCFullYear()
     let date = `December ${year}`
     let students = task.students.filter(s => classlist.includes(s.userId))

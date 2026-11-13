@@ -22,6 +22,7 @@
     { file: 'class-dashboard.js',   name: 'Advisory Rubric Calculator', desc: 'KATs, GPA, attendance, behaviour, extra-curricular', needsClass: true },
     { file: 'reports-check.js',     name: 'Reports Check',              desc: 'Missing report elements, task setup, Excellence & Endeavour' },
     { file: 'student-data-dash.js', name: 'Student Data Dashboard',     desc: 'PAT, NAPLAN and teacher judgements, live from Compass', testing: true },
+    { file: 'graduation.js',        name: 'Graduation Certificates',    desc: 'Year 10 certificates from the Graduation Rubric, ready to print' },
     { file: 'student-voice.html',   name: 'Student Voice',              desc: 'Survey results by semester, gender and subject (opens a new tab)', page: true }
   ]
 
