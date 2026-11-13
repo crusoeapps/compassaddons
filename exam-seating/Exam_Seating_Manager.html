@@ -2289,6 +2289,8 @@ function printRoomSheet(roomId) {
 /* Print columns, chosen in Settings → Print. */
 var PRINT_COLS = {
   student: ['Student', function (s, st) { return '<b>' + esc(st.last) + '</b>, ' + esc(st.first); }],
+  first: ['First name', function (s, st) { return esc(st.first); }],
+  last: ['Last name', function (s, st) { return '<b>' + esc(st.last) + '</b>'; }],
   klass: ['Class', function (s, st) { return esc(st.klass || ''); }],
   status: ['Status', function (s, st) { return esc(statusLabel(st.status)); }],
   location: ['Location', function (s, st) { return locText(s, st); }],

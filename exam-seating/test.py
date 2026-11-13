@@ -403,8 +403,9 @@ with sync_playwright() as p:
     h = grab_print(q, "printMasterList()")
     check("print columns, instructions and orientation follow settings",
           "<th>Class</th>" not in h and "<th>Notes</th>" in h and "Bring own laptop" in h and "Phones off" in h and "A4 landscape" in h)
-    q.evaluate("var d = draft(); d.print.masterCols = ['student','room','row','seat']; saveSettings()"); q.wait_for_timeout(300)
+    q.evaluate("var d = draft(); d.print.masterCols = ['first','last','room','row','seat']; saveSettings()"); q.wait_for_timeout(300)
     h = grab_print(q, "printMasterList()")
+    check("separate First name and Last name columns", "<th>First name</th><th>Last name</th>" in h)
     check("separate bold Row and Seat columns, no Status", "<th>Row</th><th>Seat</th>" in h and "<td><b>1</b></td>" in h and "<th>Status</th>" not in h)
     q.click("nav button[data-tab='sessions']"); q.wait_for_timeout(300)
     q.locator(".session-card").first.locator("button:has-text('Edit')").click(); q.wait_for_timeout(200)
