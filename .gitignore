@@ -11,3 +11,7 @@
 # which tools/build-student-voice.js generates.
 *.json
 !student-voice-data.json
+# Exam Seating: fictional demo data and its test fixture (checked: no real
+# names). Saved plan files (*.json) contain real names and stay ignored.
+!exam-seating/src/seed.json
+!exam-seating/test_baseline.json
