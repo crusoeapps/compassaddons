@@ -9,6 +9,7 @@
 //          Extra Curricular now scores calendar events in counted groups,
 //          never counting Compass activity type 10
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
+// 16 Nov 2026: any task naming exam/examination ignores submission status
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
 
@@ -245,7 +246,7 @@ $('<div>').addClass('button-print').text('🖨 Print to PDF')
 
 var headers = {
   'Name':            '',
-  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Semester Exams are excluded for Year 10 students.',
+  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Exams (any task with exam/examination in its name) always count as on time, whatever their submission status, and are excluded for Year 10 students.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation. Marked 'this class only' when Compass won't return the student's whole Chronicle.",
@@ -482,31 +483,27 @@ function loadAllAttendance(classes, user) {
 // ── KATs ──────────────────────────────────────────────────────────────────────
 function loadTasks(tasks, user, yearLevel) {
   var total = 0, submitted = 0, ontime = 0, overdue = 0, late = 0, pending = 0
-  // Year 10 only: Semester Exams don't count towards work completed
+  // Year 10 only: exams don't count towards work completed
   var excludeExams = isYear10(yearLevel)
   var examsExcluded = 0
 
   $.each(tasks.d.data, function() {
     if (this.includeInSemesterReports) {
-      var isExam = /^Semester Exam/i.test(this.name || '')
+      // Any task with "exam"/"examination" in its name (whole word, so not
+      // "example"). Exams usually have no online submission in Compass, so
+      // their submission status is ignored: they always count as on time.
+      var isExam = /\bexam(s|ination|inations)?\b/i.test(this.name || '')
       if (isExam && excludeExams) { examsExcluded++; return }
+      if (isExam) { total++; submitted++; ontime++; return }
       var status = this.students[0].submissionStatus
       // Pending (not submitted, not yet overdue) isn't counted either way;
       // the Total is flagged instead so it's clear the score may change.
       if (status === 1) { pending++; return }
       total++
-      if (isExam) {
-        switch (status) {
-          case 2: submitted++; ontime++; break
-          case 3: submitted++; ontime++; break
-          case 4: submitted++; ontime++; break
-        }
-      } else {
-        switch (status) {
-          case 2: overdue++;             break
-          case 3: submitted++; ontime++; break
-          case 4: submitted++; late++;   break
-        }
+      switch (status) {
+        case 2: overdue++;             break
+        case 3: submitted++; ontime++; break
+        case 4: submitted++; late++;   break
       }
     }
   })
