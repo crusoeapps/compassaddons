@@ -9,7 +9,8 @@
 //          Extra Curricular now scores calendar events in counted groups,
 //          never counting Compass activity type 10
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
-// 16 Nov 2026: any task naming exam/examination ignores submission status
+// 16 Nov 2026: any task naming exam/examination ignores submission status;
+//              Year 10 English KAT 4 excluded (EXCLUDED_KAT_TASKS)
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
 
@@ -246,7 +247,7 @@ $('<div>').addClass('button-print').text('🖨 Print to PDF')
 
 var headers = {
   'Name':            '',
-  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Exams (any task with exam/examination in its name) always count as on time, whatever their submission status, and are excluded for Year 10 students.',
+  'KATs':            'Key Assessment Tasks score (1–4). 1=<50% submitted, 2=≥50% submitted, 3=all submitted, 4=all submitted by due date. Pending tasks (not submitted, not yet overdue) are not counted. Exams (any task with exam/examination in its name) always count as on time, whatever their submission status, and are excluded for Year 10 students. Year 10 English Key Assessment Task 4 is not counted.',
   'GPA':             'Grade Point Average (1–4). 1=≤2.5, 2=>2.5, 3=>3.5, 4=>3.75. Shows growth from previous report.',
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation. Marked 'this class only' when Compass won't return the student's whole Chronicle.",
@@ -481,14 +482,33 @@ function loadAllAttendance(classes, user) {
 }
 
 // ── KATs ──────────────────────────────────────────────────────────────────────
+// Individual tasks left out of the KATs calculation entirely.
+//   cls:  class code (activityName), e.g. 10ENG1; subject: subject name fallback
+//   task: task name
+var EXCLUDED_KAT_TASKS = [
+  // Year 10 English, Key Assessment Task 4 (Nov 2026). Also matches "KAT 4".
+  { label: '10 English KAT 4', cls: /^10\s*ENG/i, subject: /\b(year\s*)?10\b.*english/i, task: /^\s*(key assessment task|kat)\s*4\b/i }
+]
+function excludedKatRule(t) {
+  var cls = String(t.activityName || ''), subj = String(t.subjectName || t.subjectLongName || ''), name = String(t.name || '')
+  for (var i = 0; i < EXCLUDED_KAT_TASKS.length; i++) {
+    var r = EXCLUDED_KAT_TASKS[i]
+    if (r.task.test(name) && (r.cls.test(cls) || r.subject.test(subj))) return r
+  }
+  return null
+}
+
 function loadTasks(tasks, user, yearLevel) {
   var total = 0, submitted = 0, ontime = 0, overdue = 0, late = 0, pending = 0
   // Year 10 only: exams don't count towards work completed
   var excludeExams = isYear10(yearLevel)
   var examsExcluded = 0
+  var tasksExcluded = []
 
   $.each(tasks.d.data, function() {
     if (this.includeInSemesterReports) {
+      var rule = excludedKatRule(this)
+      if (rule) { tasksExcluded.push(rule.label); return }
       // Any task with "exam"/"examination" in its name (whole word, so not
       // "example"). Exams usually have no online submission in Compass, so
       // their submission status is ignored: they always count as on time.
@@ -524,6 +544,7 @@ function loadTasks(tasks, user, yearLevel) {
   if (overdue > 0) parts.push(overdue + ' overdue')
   var detail = total > 0 ? parts.join(', ') + ' of ' + total : (pending > 0 ? 'No tasks due yet' : 'No tasks')
   if (pending > 0) detail += ' (' + pending + ' pending, not counted)'
+  if (tasksExcluded.length) detail += ' (' + tasksExcluded.join(', ') + ' excluded)'
   if (examsExcluded > 0) {
     detail += ' (' + examsExcluded + ' exam' + (examsExcluded !== 1 ? 's' : '') + ' excluded, Yr 10)'
   }
