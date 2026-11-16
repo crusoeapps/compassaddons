@@ -156,7 +156,7 @@ $(document).ready(function() {
   $('<div>')
     .addClass('cycle')
     .addClass('note')
-    .html('<p>Create graduation certificates based on the Year 10 Graduation Rubric.</p>')
+    .html('<p>Create graduation certificates based on the Year 10 Graduation Rubric S2.</p>')
     .appendTo('#dash')
   
   // get the report cycles to populate dropdown list
@@ -203,6 +203,7 @@ $(document).ready(function() {
   // Every advisory class in the cycle whose code looks like 10ADVA / 9ADVE,
   // whichever subject it sits under (was: only subject "AV102 Advisory").
   var ADV_CLASS = /^\d{1,2}\s*ADV/i
+  var RUBRIC_TASK_NAME = 'Year 10 Graduation Rubric S2'
   function loadSubjects(subjects, cycleId) {
     let list = (subjects && subjects.d) || []
     // Look in advisory-looking subjects first; if none, check every subject.
@@ -263,14 +264,15 @@ $(document).ready(function() {
   }
   
   function loadTasks(tasks, cycleId, classlist, group) {
-    let task = tasks.d.data.filter(t => t.name == "Year 10 Graduation Rubric")[0]
+    // Learning task name in Compass (renamed Nov 2026). Spaces/case are ignored.
+    let task = tasks.d.data.filter(t => String(t.name || '').trim().replace(/\s+/g, ' ').toLowerCase() == RUBRIC_TASK_NAME.toLowerCase())[0]
     // A class without the rubric task used to throw here and leave its section
     // blank with no explanation.
     if (!task) {
       // Classes without the rubric (e.g. other year levels) are listed in one line.
       let skipped = $(`#c${cycleId}.cycle .skipped`)
       let names = (skipped.data('names') || []).concat(group).sort()
-      skipped.data('names', names).text('No "Year 10 Graduation Rubric" task, not shown: ' + names.join(', ')).show()
+      skipped.data('names', names).text('No "' + RUBRIC_TASK_NAME + '" task, not shown: ' + names.join(', ')).show()
       return
     }
     $(`#c${cycleId}.cycle .h${group}, #c${cycleId}.cycle .g${group}.group`).show()
