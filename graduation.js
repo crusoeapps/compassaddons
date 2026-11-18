@@ -286,7 +286,8 @@ $(document).ready(function() {
       let name = this.userName.replace(/\s\(.*\)/, '')
       let score = this.rubricResults.length ? parseInt(this.rubricResults[0].overallResult) : 0
       let level = "Non-attendance"
-      if (score >= 22) {
+      // Bands (Nov 2026): 23-24 Commendation, 16-22 Graduation, 11-15 Participation, 5-10 Enrolment
+      if (score >= 23) {
         level = "Commendation"
       } else if (score >= 16) {
         level = "Graduation"
