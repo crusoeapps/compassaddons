@@ -11,6 +11,7 @@
 // Previously (9 Nov 2026): KATs excludes Semester Exams for Year 10 students only
 // 16 Nov 2026: any task naming exam/examination ignores submission status;
 //              Year 10 English KAT 4 excluded (EXCLUDED_KAT_TASKS)
+// 18 Nov 2026: Year 10 Total = Graduation Rubric S2 result /24, certificate bands
 // Previously (5 Aug 2026): Chronicle endpoint fixed (GetUserChronicleFeedThin), Extra Curricular
 //          cell shows total events / excursion score basis / detention-suspension warning line
 
@@ -56,9 +57,38 @@ function updateTotal(user) {
       count++
     }
   })
-  if (count < scoreColumns.length) return
   var el = $('.dash' + user + ' .total')
   if (!el.length) return
+  var pending = scores.pendingTasks || 0
+  function pendingWarning() {
+    if (pending > 0) el.append($('<span>').addClass('detail-text-warning')
+      .text('\u26A0 ' + pending + ' task' + (pending !== 1 ? 's' : '') + ' pending: score may change'))
+  }
+
+  // Year 10: the Total is the student's Graduation Rubric result out of 24
+  // (the five columns plus Work Experience), with the certificate bands, so
+  // it always matches the certificate.
+  var grad = scores.gradRubric
+  if (grad && grad.score !== null) {
+    var GRAD_BANDS = [
+      [23, 4, 'Commendation',   'Graduation Rubric 23–24'],
+      [16, 3, 'Graduation',     'Graduation Rubric 16–22'],
+      [11, 2, 'Participation',  'Graduation Rubric 11–15'],
+      [5,  1, 'Enrolment',      'Graduation Rubric 5–10'],
+      [0,  1, 'Non-attendance', 'Graduation Rubric under 5']
+    ]
+    var gb = GRAD_BANDS.find(function(b) { return grad.score >= b[0] })
+    el.empty()
+    el.append($('<span>').addClass('score-badge score-' + gb[1]).text(grad.score))
+    el.append($('<span>').addClass('detail-text').css('font-weight', '600').text(gb[2] + ' (/24)'))
+    el.append($('<span>').addClass('detail-text').text(gb[3]))
+    if (grad.workExperience !== null) el.append($('<span>').addClass('detail-text').text('Work Experience: ' + grad.workExperience))
+    if (count === scoreColumns.length) el.append($('<span>').addClass('ec-calendar').text('Calculator columns: ' + total + '/20'))
+    pendingWarning()
+    return
+  }
+
+  if (count < scoreColumns.length) return
   el.empty()
   var RATING_BANDS = [
     [19, 4, 'Completion with Commendation', 'Exceeds expected standard'],
@@ -70,11 +100,8 @@ function updateTotal(user) {
   el.append($('<span>').addClass('score-badge score-' + band[1]).text(total))
   el.append($('<span>').addClass('detail-text').css('font-weight', '600').text(band[2]))
   el.append($('<span>').addClass('detail-text').text(band[3]))
-  var pending = scores.pendingTasks || 0
-  if (pending > 0) {
-    el.append($('<span>').addClass('detail-text-warning')
-      .text('\u26A0 ' + pending + ' task' + (pending !== 1 ? 's' : '') + ' pending: score may change'))
-  }
+  if (grad) el.append($('<span>').addClass('detail-text-warning').text('Year 10 Graduation Rubric not marked yet: showing /20'))
+  pendingWarning()
 }
 
 $(`<div id="dash"><style type="text/css">
@@ -252,7 +279,7 @@ var headers = {
   'Attendance':      'Overall attendance across all classes. 1=≤90%, 2=>90%, 3=>95%, 4=>98%.',
   'Behaviour':       "Behaviour & conduct (1–4) across ALL classes. Based on: Detention, Suspension, Attitude/Behaviour, Out of Class, REAL Behaviour Not Shown, Non Negotiable Behaviour, and REAL Commendation. Marked 'this class only' when Compass won't return the student's whole Chronicle.",
   'Extra Curricular':'Events this year in the counted groups: Excursion, Incursion, Camp, Sport, Performance/arts, Leadership/student voice (1=none, 2=one, 3=two–three, 4=four+). Falls back to the attendance Events count if the calendar can\'t load.',
-  'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment. Flagged when a student has pending tasks, as the score may change.'
+  'Total /20':       'Sum of all five scores. 19–20=Completion with Commendation, 12–18=Completion, 7–11=Participation, <7=Enrolment. Year 10: the Year 10 Graduation Rubric S2 result out of 24 (includes Work Experience): 23–24=Commendation, 16–22=Graduation, 11–15=Participation, 5–10=Enrolment. Flagged when a student has pending tasks, as the score may change.'
 }
 
 $('<table>').append($('<thead>').append($('<tr>'))).appendTo('#dash')
@@ -498,6 +525,28 @@ function excludedKatRule(t) {
   return null
 }
 
+// Year 10 Graduation Rubric task (same name as Graduation Certificates).
+var GRAD_RUBRIC_TASK = 'Year 10 Graduation Rubric S2'
+function isGradRubricTask(t) {
+  return String(t.name || '').trim().replace(/\s+/g, ' ').toLowerCase() === GRAD_RUBRIC_TASK.toLowerCase()
+}
+// Look anywhere in the rubric result for a criterion named Work Experience
+// with a numeric score. Returns null if Compass doesn't include it.
+function findWorkExperience(v, depth) {
+  if (!v || typeof v !== 'object' || (depth || 0) > 6) return null
+  if (Array.isArray(v)) {
+    for (var i = 0; i < v.length; i++) { var r = findWorkExperience(v[i], (depth || 0) + 1); if (r !== null) return r }
+    return null
+  }
+  var label = [v.name, v.criteriaName, v.criterionName, v.title, v.description, v.label].filter(function(x) { return typeof x === 'string' }).join(' ')
+  if (/work\s*exp/i.test(label)) {
+    var vals = [v.result, v.score, v.value, v.points, v.overallResult, v.mark]
+    for (var j = 0; j < vals.length; j++) { var n = parseFloat(vals[j]); if (!isNaN(n)) return n }
+  }
+  for (var k in v) { var f = findWorkExperience(v[k], (depth || 0) + 1); if (f !== null) return f }
+  return null
+}
+
 function loadTasks(tasks, user, yearLevel) {
   var total = 0, submitted = 0, ontime = 0, overdue = 0, late = 0, pending = 0
   // Year 10 only: exams don't count towards work completed
@@ -507,6 +556,7 @@ function loadTasks(tasks, user, yearLevel) {
 
   $.each(tasks.d.data, function() {
     if (this.includeInSemesterReports) {
+      if (isGradRubricTask(this)) return // the rubric isn't a KAT
       var rule = excludedKatRule(this)
       if (rule) { tasksExcluded.push(rule.label); return }
       // Any task with "exam"/"examination" in its name (whole word, so not
@@ -554,6 +604,13 @@ function loadTasks(tasks, user, yearLevel) {
   el.append($('<span>').addClass('detail-text').text(detail))
   if (!scoreTracker[user]) scoreTracker[user] = {}
   scoreTracker[user].pendingTasks = pending
+  // Year 10: the Graduation Rubric result becomes the Total (see updateTotal).
+  var rubricTask = (tasks.d.data || []).filter(isGradRubricTask)[0]
+  if (rubricTask) {
+    var rr = (rubricTask.students && rubricTask.students[0] && rubricTask.students[0].rubricResults) || []
+    var overall = rr.length ? parseInt(rr[0].overallResult, 10) : NaN
+    scoreTracker[user].gradRubric = { score: isNaN(overall) ? null : overall, workExperience: findWorkExperience(rr) }
+  }
   recordScore(user, 'kats', score)
 }
 
