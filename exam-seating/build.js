@@ -15,6 +15,7 @@ const SRC = path.join(__dirname, 'src');
 const OUT = path.join(__dirname, 'Exam_Seating_Manager.html');
 
 const JS_PARTS = [
+  'part0_print_shared.js',     // print CSS, fitStyle, hidden-iframe printing (shared with exam-rooms.js)
   'part2_core.js',             // config, state, sync layer, editor mode, modal, nav
   'part3_sessions.js',         // sessions + students + Excel/CSV import
   'part4_rooms_seating.js',    // rooms, templates, seating engine, seat grid
