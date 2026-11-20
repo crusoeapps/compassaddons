@@ -7,8 +7,10 @@ and general teaching staff (view-only).
 ## Build & test
 
 ```bash
-node build.js      # regenerates Exam_Seating_Manager.html from src/
-python3 test.py    # 103 Playwright checks against the built file (needs node too)
+node build.js                 # regenerates Exam_Seating_Manager.html from src/
+python3 test.py               # 103 Playwright checks against the built file (needs node too)
+node build_exam_rooms.js      # regenerates ../exam-rooms.js (the Compass Exam Rooms button)
+python3 exam-rooms.test.py    # Exam Rooms checks against fictional Compass responses
 ```
 
 Always run both after a change. `test.py` needs `playwright install chromium`
@@ -35,6 +37,12 @@ dependency beyond two CDN scripts (Google Fonts, SheetJS).
 | `src/part6_settings.js` | Settings tab: branding, room types, statuses, defaults, print |
 | `src/part7_files.js` | Save to file / Open file (whole-plan backups) |
 | `src/part5_lookup_print_help.js` | Lookup, print sheets, how-to guides, seed, boot (built last) |
+| `src/part0_print_shared.js` | Print CSS, `fitStyle()`, hidden-iframe printing — shared with Exam Rooms (built first) |
+| `exam-rooms/core.js` | Exam Rooms: names, matching, seating, group ranges (pure functions) |
+| `exam-rooms/docs.js` | Exam Rooms: the printed documents and the plan file |
+| `exam-rooms/ui.js` | Exam Rooms: the panel inside Compass and the Compass calls |
+| `build_exam_rooms.js` | Builds `../exam-rooms.js` (never hand-edit that file) |
+| `exam-rooms.test.py` | Exam Rooms checks; fixtures made from the fictional `test-data/` |
 | `src/seed.json` | Local-mode demo data (Year 9 NAPLAN 2026 layout, **fictional names**) |
 | `Code.gs` | Google Apps Script backend — the authoritative API contract |
 | `test_backend.js` | Test-only: real `Code.gs` on a fake in-memory Sheet |

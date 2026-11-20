@@ -72,6 +72,34 @@ Either option works; the file is identical for both.
 
 The **How-to Guides** tab inside the app covers all of this for staff who've never seen it.
 
+## Exam Rooms: seat an exam straight from Compass (2-minute guide)
+
+**Exam Rooms** is a button that runs inside Compass. It reads your class lists from Compass, seats everyone, and makes the room charts, lists and rolls, with no CSV exports.
+
+**Add the button (once).** Make a new bookmark, name it **Exam Rooms**, and paste this as its address (URL):
+
+```
+javascript:(function(){var s=document.createElement('script');s.src='https://crusoeapps.github.io/compassaddons/exam-rooms.js?t='+Math.floor(Date.now()/3e5);document.body.appendChild(s);})();
+```
+
+It is private: it isn't on the Compass Tools menu or the tools page. It always loads the latest version.
+
+**Use it.** Log in to Compass, click **Exam Rooms**, then work through the steps along the top:
+
+1. **Exam session**: exam name, year level, each session for the roll (e.g. *Monday 16 November AM*), and the room: name, rows, seats per row, and how many seats to use in each row (the rest stay empty as spares).
+2. **Classes**: one group per course in seating order (e.g. *Advanced Maths: 10MAA1, 10MAA2*; ranges like *10MAG1–10MAG6* work), the gap after each group, then **Get students from Compass**. Check the student counts. A code that isn't found, or a class Compass didn't answer for, is flagged; press **Retry** for just that class.
+3. **Exemptions**: paste first and last names.
+4. **SEA students**: paste the table (First name, Last name, Form, Reason, Provision). Reasons are only used to read the table: never shown, printed or saved. Tick anyone who stays in the main room.
+5. **Fixed seats** and 6. **Name fixes** (optional).
+7. **Seating chart**: fix anything marked **Please confirm** or **Not found** (nothing is guessed). If students don't fit, choose one of the offered options. Drag a student onto another seat to swap them, or click one seat and then another. Moves are kept.
+8. **Documents**: **Print / Save as PDF** for each one, or **Download all**.
+
+**Save and come back later.** **Save session file** (top right) downloads one `.json` file. Next time, **Open saved file**: it restores everything and re-reads the class lists from Compass, then tells you who has joined or left since you saved. Your fixed seats and moves are kept. The same file also opens in the Exam Seating Manager (**Open file**).
+
+**Privacy.** The tool only talks to Compass, using your own login. Saved files and documents contain student names: keep them in your school OneDrive or Google Drive, never on a public site.
+
+**Not yet checked against real Compass** (tell the developer if any looks wrong): the lead-teacher code on each roll shows the teacher's **initials** for now, and how Compass stores preferred names in class lists hasn't been confirmed.
+
 ## Customising the app (Settings tab)
 
 Editors see a **Settings** tab. Changes apply only when you click **Save settings**, and they are shared with every editor through the Google Sheet (local mode: this browser only).
