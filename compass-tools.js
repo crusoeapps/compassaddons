@@ -23,6 +23,7 @@
     { file: 'reports-check.js',     name: 'Reports Check',              desc: 'Missing report elements, task setup, Excellence & Endeavour' },
     { file: 'student-data-dash.js', name: 'Student Data Dashboard',     desc: 'PAT, NAPLAN and teacher judgements, live from Compass', testing: true },
     { file: 'graduation.js',        name: 'Graduation Certificates',    desc: 'Year 10 certificates from the Graduation Rubric, ready to print' },
+    { file: 'exam-rooms.js',        name: 'Exam Rooms',                 desc: 'Seat an exam from class codes and make the rolls (coordinators; password needed)', locked: true },
     { file: 'student-voice.html',   name: 'Student Voice',              desc: 'Survey results by semester, gender and subject (opens a new tab)', page: true }
   ]
 
@@ -81,6 +82,13 @@
     var n = document.createElement('div')
     n.setAttribute('style', 'font-weight:600' + (ok ? '' : ';color:#9ca3af'))
     n.textContent = tool.name
+    if (tool.locked) {
+      var lock = document.createElement('span')
+      lock.textContent = '\uD83D\uDD12'
+      lock.setAttribute('title', 'Password needed')
+      lock.setAttribute('style', 'margin-left:6px;font-size:11px')
+      n.appendChild(lock)
+    }
     if (tool.testing) {
       var tag = document.createElement('span')
       tag.textContent = 'In testing'

@@ -42,6 +42,7 @@ dependency beyond two CDN scripts (Google Fonts, SheetJS).
 | `exam-rooms/docs.js` | Exam Rooms: the printed documents and the plan file |
 | `exam-rooms/ui.js` | Exam Rooms: the panel inside Compass and the Compass calls |
 | `build_exam_rooms.js` | Builds `../exam-rooms.js` (never hand-edit that file) |
+| `set_exam_rooms_password.py` | Changes the Exam Rooms password (stores only a PBKDF2 fingerprint in `exam-rooms/ui.js`); never commit a password |
 | `exam-rooms.test.py` | Exam Rooms checks; fixtures made from the fictional `test-data/` |
 | `src/seed.json` | Local-mode demo data (Year 9 NAPLAN 2026 layout, **fictional names**) |
 | `Code.gs` | Google Apps Script backend — the authoritative API contract |

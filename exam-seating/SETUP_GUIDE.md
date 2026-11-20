@@ -76,13 +76,15 @@ The **How-to Guides** tab inside the app covers all of this for staff who've nev
 
 **Exam Rooms** is a button that runs inside Compass. It reads your class lists from Compass, seats everyone, and makes the room charts, lists and rolls, with no CSV exports.
 
-**Add the button (once).** Make a new bookmark, name it **Exam Rooms**, and paste this as its address (URL):
+**Open it.** Click **Compass Tools** in your bookmarks bar and choose **Exam Rooms 🔒**. It asks for the Exam Rooms password (ask the exam coordinator); once entered it stays unlocked until you close that Compass tab. Coordinators who prefer a button of their own can make a bookmark named **Exam Rooms** with this address (URL); it asks for the same password:
 
 ```
 javascript:(function(){var s=document.createElement('script');s.src='https://crusoeapps.github.io/compassaddons/exam-rooms.js?t='+Math.floor(Date.now()/3e5);document.body.appendChild(s);})();
 ```
 
-It is private: it isn't on the Compass Tools menu or the tools page. It always loads the latest version.
+It always loads the latest version. It is not on the tools web page.
+
+**About the password.** The tools' code is public, so the password is a lock on the door, not a safe: it stops Exam Rooms being opened by accident. It can never show anyone more students than their own Compass login allows. Only a scrambled fingerprint of the password is stored in the code. To change it, run `python3 exam-seating/set_exam_rooms_password.py` (it asks for the new password without showing it), then commit and push `exam-seating/exam-rooms/ui.js` and `exam-rooms.js`.
 
 **Use it.** Log in to Compass, click **Exam Rooms**, then work through the steps along the top:
 
