@@ -203,14 +203,28 @@ function erDropHeader(rows) {
   return rows;
 }
 
-/* Exemptions: "First, Last" or "First<TAB>Last" per row. A single cell with a
-   space is split at the last space. */
+/* Exemptions: "First, Last" or "First<TAB>Last" per row. A whole name in a
+   single cell is split at the last space for now and kept as `whole`, so the
+   panel can try every split against the class lists (erSplitWhole). */
 function erParseExemptions(text) {
   return erDropHeader(erParseRows(text)).map(function (r) {
     if (r.length >= 2) return { first: r[0], last: r[1] };
     var s = r[0].trim(), k = s.lastIndexOf(' ');
-    return k > 0 ? { first: s.slice(0, k), last: s.slice(k + 1) } : { first: '', last: s };
+    return k > 0 ? { first: s.slice(0, k), last: s.slice(k + 1), whole: s } : { first: '', last: s };
   }).filter(function (x) { return x.first || x.last; });
+}
+
+/* A whole name typed in one cell ("Ivy Van Der Berg"): try every first/last
+   split and use the one that is an exact match, so multi-word surnames work.
+   With no exact match it falls back to splitting at the last space, and the
+   usual confirm / not-found rules apply. */
+function erSplitWhole(whole, students) {
+  var w = String(whole || '').trim().split(/\s+/);
+  for (var i = w.length - 1; i >= 1; i--) {
+    var f = w.slice(0, i).join(' '), l = w.slice(i).join(' ');
+    if (erMatchName(f, l, students).status === 'exact') return { first: f, last: l };
+  }
+  return { first: w.slice(0, -1).join(' '), last: w[w.length - 1] || '' };
 }
 
 /* SEA table: First name, Last name, Form, Reason, Provision. The reason is
