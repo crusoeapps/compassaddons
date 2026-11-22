@@ -197,15 +197,18 @@ function erBuildModel() {
 
   var exempt = {}, provision = {}, pending = [], report = [];
   erParseExemptions(S.exemptText).forEach(function (x) {
+    if (x.whole) { var sp = erSplitWhole(x.whole, list); x = { first: sp.first, last: sp.last }; }
     var r = erResolve('ex', x.first, x.last, list);
     report.push({ kind: 'Exemption', entry: x, res: r });
     if (!r.done) pending.push(r.key);
     if (r.id) exempt[r.id] = true;
   });
+  var both = [];
   S.seaRows.forEach(function (x) {
     var r = erResolve('sea', x.first, x.last, list);
     report.push({ kind: 'SEA', entry: x, res: r });
     if (!r.done) pending.push(r.key);
+    if (r.id && exempt[r.id] && both.indexOf(r.id) < 0) both.push(r.id);   // on both lists: must be sorted out
     if (r.id && !exempt[r.id]) provision[r.id] = x.provision || '';
   });
 
@@ -225,6 +228,16 @@ function erBuildModel() {
     groups.push({ name: g.name || 'Group', gap: g.gap, students: ids.filter(function (id) {
       return !exempt[id] && !(provision[id] !== undefined && !S.seaStay[id]);
     }).map(function (id) { return students[id]; }) });
+  });
+
+  // Every class code in the groups must have loaded; otherwise its students
+  // would be missing from every document without anyone noticing.
+  var classProblems = [];
+  S.groups.forEach(function (g) {
+    erExpandCodes(g.codes).forEach(function (code) {
+      var c = data.classes[code];
+      if ((!c || c.status !== 'ok') && classProblems.indexOf(code) < 0) classProblems.push(code);
+    });
   });
 
   var seating = erSeat(S.room, groups, S.pins);
@@ -252,7 +265,8 @@ function erBuildModel() {
     students: students, exempt: exempt, provision: provision, sea: sea, sitting: sitting, groupOf: groupOf,
     seats: seating.seats, unplaced: seating.unplaced, conflicts: seating.conflicts, groups: groups,
     ranges: erGroupRanges(S.room, groups, seating.seats, S.pins), classes: classes, classOrder: classOrder,
-    report: report, pending: pending
+    report: report, pending: pending, classProblems: classProblems,
+    both: both.map(function (id) { return students[id]; })
   };
 }
 
@@ -555,6 +569,11 @@ function erStepChart(model) {
       '<button class="er-btn" data-act="fitSpare">Put the extra students in the spare seats</button></div>';
   }
   model.conflicts.forEach(function (c) { h += '<div class="er-warn">' + erEsc(c) + '</div>'; });
+  if (model.classProblems.length) h += '<div class="er-warn"><b>Not loaded from Compass: ' + erEsc(model.classProblems.join(', ')) + '.</b> ' +
+    'Their students are missing from this chart. On the Classes step, retry them, or fix or remove the codes.</div>';
+  model.both.forEach(function (st) {
+    h += '<div class="er-warn"><b>' + erEsc(st.first + ' ' + st.last) + '</b> is on both the exempt list and the SEA list. Remove them from one of the lists.</div>';
+  });
   h += '<p>Drag a student onto another seat to swap them (or onto an empty seat to move them). Or click one seat, then another. ' +
     'Moved students become fixed seats, so they stay put if you change anything else. Green outline = fixed.</p>';
   var grid = {};
@@ -583,7 +602,9 @@ function erStepChart(model) {
 }
 
 function erStepDocs(model) {
-  var blocked = model.pending.length ? 'Some names still need checking (Seating chart step).' : model.unplaced.length ? 'Some students do not fit yet (Seating chart step).' : '';
+  var blocked = model.classProblems.length ? 'Some classes are not loaded from Compass (' + model.classProblems.join(', ') + '). Retry them, or fix or remove the codes, on the Classes step.'
+    : model.both.length ? 'A student is on both the exempt list and the SEA list (Seating chart step).'
+    : model.pending.length ? 'Some names still need checking (Seating chart step).' : model.unplaced.length ? 'Some students do not fit yet (Seating chart step).' : '';
   if (blocked) return '<div class="er-warn">' + erEsc(blocked) + ' Documents can be made once that is sorted.</div>';
   var docs = erDocsFor(model);
   var h = '<p>Each document opens the print dialog: choose <b>Save as PDF</b> to keep it, or print it. Nothing leaves this computer.</p><table class="er-t">';

@@ -212,6 +212,12 @@ with sync_playwright() as pw:
     check("lead teacher initials", cls["10MAA1"]["teacher"] == "TC" and cls["10MAF2"]["teacher"] == "SK", (cls["10MAA1"]["teacher"], cls["10MAF2"]["teacher"]))
     total = len(STUDENTS)
     check("student in two classes counted once", pg.evaluate("() => Object.keys(window.__examRooms.ER.data.students).length") == total)
+    check("a class that did not load blocks documents", pg.evaluate("() => window.__examRooms.model().classProblems") == ["10MAG4"])
+    fill("[data-bind='groups.1.codes']", "10MAG1–10MAG3, 10MAGX")
+    check("removing the bad code clears the block", pg.evaluate("() => window.__examRooms.model().classProblems") == [])
+    sw = pg.evaluate("() => window.__examRooms.fn.splitWhole('Ivy Van Der Berg', Object.values(window.__examRooms.ER.data.students))")
+    check("a whole name in one cell finds a multi-word surname", sw == {"first": "Ivy", "last": "Van Der Berg"}, sw)
+    check("exam-rooms.js is pure ASCII (works whatever the page charset)", all(ord(ch) < 128 for ch in open(os.path.join(HERE, "..", "exam-rooms.js"), encoding="utf-8").read()))
 
     # ---- step 3/4: exemptions and SEA ----
     pg.click("#er-root [data-act='next']")
@@ -243,6 +249,14 @@ with sync_playwright() as pw:
         key = pg.evaluate("([f, l]) => 'ex|' + f.toLowerCase().replace(/[\\s\\-'.]+/g, '') + '|' + l.toLowerCase().replace(/[\\s\\-'.]+/g, '')", [first, last])
         pg.select_option("#er-root select[data-match='%s']" % key, choice)
     check("all names confirmed", M()["pending"] == 0, M()["pending"])
+    both = pg.evaluate("() => window.__examRooms.model().both.map(function (s) { return s.id; })")
+    check("a student on both the exempt and SEA lists is flagged", both == [uid("Ler Paw", "KYAW")], both)
+    pg.click("#er-root [data-act='go'][data-i='7']")
+    check("...and blocks documents", "on both the exempt list and the SEA list" in pg.inner_text("#er-root .er-body"))
+    pg.click("#er-root [data-act='go'][data-i='6']")
+    key = pg.evaluate("() => 'ex|' + 'lerpaw' + '|' + 'kyaww'")
+    pg.select_option("#er-root select[data-match='%s']" % key, "none")   # the exemption list's "Kyaww" was not this student
+    check("choosing Not found for the typo clears it", pg.evaluate("() => window.__examRooms.model().both.length") == 0)
 
     # ---- fixed seats and name fixes ----
     tess = uid("Tess", "BRAMLEY") if any(l == "BRAMLEY" and g == "Tess" for g, l in STUDENTS) else None
