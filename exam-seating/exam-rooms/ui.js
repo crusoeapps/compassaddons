@@ -750,7 +750,7 @@ function erInput(e) {
    tool from being opened by accident. It can never show anyone more than their
    own Compass login allows. Only a slow PBKDF2 fingerprint of the password is
    stored here, never the password. To change it, see SETUP_GUIDE.md. */
-var ER_LOCK = { salt: 'b32245d605bc4efcb9a19a1699ddfaa5', iterations: 250000, hash: 'a63eb35210cfb4b266c4f85794db03f735f75779e87eb4c32a145f83c5a03ce4' };
+var ER_LOCK = { salt: 'f2812c8024ba654643a19ed3fa452ea6', iterations: 250000, hash: '97581a2c9496d6dc668fb9fc661df1687e09d965633e2e1174ae94577beea05b' };
 var ER_UNLOCK_KEY = 'examRoomsUnlocked';
 
 function erHex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
