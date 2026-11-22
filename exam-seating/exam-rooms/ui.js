@@ -745,60 +745,9 @@ function erInput(e) {
   }
 }
 
-/* ---------- password ----------
-   The code is public, so this is a lock on the door, not a safe: it keeps the
-   tool from being opened by accident. It can never show anyone more than their
-   own Compass login allows. Only a slow PBKDF2 fingerprint of the password is
-   stored here, never the password. To change it, see SETUP_GUIDE.md. */
-var ER_LOCK = { salt: 'f2812c8024ba654643a19ed3fa452ea6', iterations: 250000, hash: '97581a2c9496d6dc668fb9fc661df1687e09d965633e2e1174ae94577beea05b' };
-var ER_UNLOCK_KEY = 'examRoomsUnlocked';
-
-function erHex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
-function erUnhex(hex) { var a = new Uint8Array(hex.length / 2); for (var i = 0; i < a.length; i++) a[i] = parseInt(hex.substr(i * 2, 2), 16); return a; }
-
-async function erCheckPassword(pw) {
-  var key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
-  var bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: erUnhex(ER_LOCK.salt), iterations: ER_LOCK.iterations }, key, 256);
-  return erHex(bits) === ER_LOCK.hash;
-}
-function erUnlocked() { try { return sessionStorage.getItem(ER_UNLOCK_KEY) === ER_LOCK.hash; } catch (e) { return false; } }
-function erRemember() { try { sessionStorage.setItem(ER_UNLOCK_KEY, ER_LOCK.hash); } catch (e) { /* asked again next time */ } }
-
-function erShowLock(root, onOpen) {
-  root.innerHTML = '<div class="er-card" style="inset:auto;left:50%;top:20vh;transform:translateX(-50%);width:min(420px,92vw)">' +
-    '<div class="er-head"><strong>Exam Rooms</strong><button class="er-btn" data-lock="close">Close</button></div>' +
-    '<form class="er-body" data-lock="form"><p>Exam Rooms is for exam coordinators. Enter the password to open it.</p>' +
-    '<input type="password" data-lock="pw" autocomplete="off" style="width:100%" aria-label="Password">' +
-    '<p class="er-bad" data-lock="msg" style="min-height:1.4em;margin:8px 0"></p>' +
-    '<button class="er-btn pri" type="submit">Open</button></form></div>';
-  var pw = root.querySelector('[data-lock="pw"]'), msg = root.querySelector('[data-lock="msg"]');
-  pw.focus();
-  root.querySelector('[data-lock="close"]').onclick = function () { root.remove(); };
-  root.querySelector('[data-lock="form"]').onsubmit = async function (e) {
-    e.preventDefault();
-    msg.textContent = 'Checking…';
-    var ok = false;
-    try { ok = await erCheckPassword(pw.value); }
-    catch (err) { msg.textContent = 'This browser could not check the password. Try Chrome or Edge.'; return; }
-    if (!ok) { msg.textContent = 'That password is not right. Try again.'; pw.select(); return; }
-    erRemember();
-    onOpen();
-  };
-}
-
 function erStart() {
   var existing = document.getElementById('er-root');
   if (existing) { existing.style.display = 'block'; return; }
-  if (!erUnlocked()) {
-    var lock = document.createElement('div');
-    lock.id = 'er-root';
-    if (!document.getElementById('er-style')) {
-      var st = document.createElement('style'); st.id = 'er-style'; st.textContent = ER_CSS; document.head.appendChild(st);
-    }
-    document.body.appendChild(lock);
-    erShowLock(lock, function () { lock.remove(); erStart(); });
-    return;
-  }
   if (!document.getElementById('er-style')) {
     var style = document.createElement('style');
     style.id = 'er-style';

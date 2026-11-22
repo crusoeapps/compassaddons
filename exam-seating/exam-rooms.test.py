@@ -102,22 +102,10 @@ class FakeCompass:
             return j({"d": rows[body.get("start", 0): body.get("start", 0) + body.get("limit", 100)]})
         return route.fulfill(status=200, content_type="text/html", body="<html><body><h1>Compass</h1></body></html>")
 
-# The tool is password protected. Tests use their own copy with a known test
-# password (cheap iterations), so the real password is never needed or stored.
-import hashlib
-TEST_PW = "test-password-only"
-_salt, _it = "00112233445566778899aabbccddeeff", 1000
-_real = open(TOOL, encoding="utf-8").read()
-_m = re.search(r"var ER_LOCK = \{ salt: '([0-9a-f]+)', iterations: (\d+), hash: '([0-9a-f]+)' \};", _real)
-assert _m, "ER_LOCK not found in exam-rooms.js"
-TOOL_JS = _real.replace(_m.group(0), "var ER_LOCK = { salt: '%s', iterations: %d, hash: '%s' };" % (
-    _salt, _it, hashlib.pbkdf2_hmac("sha256", TEST_PW.encode(), bytes.fromhex(_salt), _it).hex()))
+TOOL_JS = open(TOOL, encoding="utf-8").read()
 
-def load_tool(page, password=TEST_PW):
+def load_tool(page):
     page.add_script_tag(content=TOOL_JS)
-    if page.query_selector("#er-root [data-lock='pw']"):
-        page.fill("#er-root [data-lock='pw']", password)
-        page.click("#er-root form[data-lock='form'] button[type=submit]")
     page.wait_for_selector("#er-root .er-steps")
 
 EXEMPT = open(os.path.join(TD, "Exemptions.csv"), encoding="utf-8").read()
@@ -136,22 +124,15 @@ with sync_playwright() as pw:
     pg.route("https://compass.test/**", fake.handle)
     pg.goto("https://compass.test/Records/User.aspx")
     pg.evaluate("window.Compass = { schoolId: 1 }")
-    # ---- password ----
-    check("real password is not in the published code", "ER_LOCK" in _real and "password" not in _m.group(0).lower())
+    # ---- opening: no password ----
+    check("no password left in the published code", not re.search(r"ER_LOCK|erCheckPassword|data-lock", TOOL_JS))
     pg.add_script_tag(content=TOOL_JS)
-    pg.wait_for_selector("#er-root [data-lock='pw']")
-    check("asks for a password before anything else", pg.query_selector("#er-root .er-steps") is None)
-    pg.fill("#er-root [data-lock='pw']", "wrong guess"); pg.click("#er-root form[data-lock='form'] button[type=submit]")
-    pg.wait_for_function("() => /not right/.test(document.querySelector(\"#er-root [data-lock='msg']\").textContent)")
-    check("wrong password is refused", pg.query_selector("#er-root .er-steps") is None)
-    check("no Compass data is read before unlocking", not any(".svc" in c for c in fake.calls), fake.calls)
-    pg.fill("#er-root [data-lock='pw']", TEST_PW); pg.click("#er-root form[data-lock='form'] button[type=submit]")
-    pg.wait_for_selector("#er-root .er-card .er-steps")
-    check("right password opens the panel", pg.is_visible("#er-root .er-steps"))
-    pg.reload(); pg.evaluate("window.Compass = { schoolId: 1 }")
-    pg.add_script_tag(content=TOOL_JS)
-    pg.wait_for_selector("#er-root .er-steps", timeout=5000)
-    check("unlocking is remembered in the same tab", pg.query_selector("#er-root [data-lock='pw']") is None)
+    pg.wait_for_selector("#er-root .er-card .er-steps", timeout=5000)
+    check("opens straight to the steps, no password asked", pg.query_selector("#er-root input[type=password]") is None and pg.is_visible("#er-root .er-steps"))
+    check("no Compass data is read just by opening it", not any(".svc" in c for c in fake.calls), fake.calls)
+    menu = open(os.path.join(HERE, "..", "compass-tools.js"), encoding="utf-8").read()
+    check("Compass Tools menu no longer shows a lock or asks for a password",
+          "locked" not in menu and "Password needed" not in menu and "password" not in menu.lower() and "exam-rooms.js" in menu)
 
     F = lambda: "window.__examRooms.fn"
     # ---- names: every case in test-data ----
