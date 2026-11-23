@@ -304,6 +304,52 @@ with sync_playwright() as pw:
     check("click-then-click moves a student to an empty seat", m3[b_id] == {"row": 1, "seat": 18}, m3[b_id])
     check("moves are kept as fixed seats", S()["pins"].get(b_id) == {"row": 1, "seat": 18})
 
+    # ---- pick several students and move them as a block ----
+    def seat_of(i): return M2()[i]
+    def who(r, s_): return [i for i, p in M2().items() if p["row"] == r and p["seat"] == s_]
+    M2 = lambda: pg.evaluate("() => JSON.parse(JSON.stringify(window.__examRooms.model().seats))")
+    cell = lambda r, s_: "#er-root td[data-row='%d'][data-seat='%d']" % (r, s_)
+    # a 2 x 2 block: Rows 3-4, Seats 2-3, picked with Ctrl-click then Shift-click
+    blk = {(r, s_): who(r, s_)[0] for r in (3, 4) for s_ in (2, 3)}
+    pg.click(cell(3, 2), modifiers=["Control"])
+    pg.click(cell(4, 3), modifiers=["Shift"])
+    sel = pg.evaluate("() => window.__examRooms.ER.selection.slice()")
+    check("Shift-click picks everyone in the block", sorted(sel) == sorted(blk.values()), (sel, blk))
+    check("picked students are highlighted with a count", pg.locator("#er-root td.sel").count() == 4 and "4 picked" in pg.inner_text("#er-root [data-selbar]"))
+    pg.click(cell(4, 2), modifiers=["Control"])
+    check("Ctrl-click removes one from the selection", len(pg.evaluate("() => window.__examRooms.ER.selection")) == 3)
+    pg.click(cell(4, 2), modifiers=["Control"])
+    in_way = {(r, s_): (who(r, s_) or [None])[0] for r in (5, 6) for s_ in (2, 3)}
+    pg.click(cell(5, 2))      # the first pick (Row 3 Seat 2) lands on Row 5 Seat 2
+    after = M2()
+    check("the group moves together and keeps its shape",
+          all(after[blk[(r, s_)]] == {"row": r + 2, "seat": s_} for (r, s_) in blk), {k: after[v] for k, v in blk.items()})
+    vac = [{"row": 3, "seat": 2}, {"row": 3, "seat": 3}, {"row": 4, "seat": 2}, {"row": 4, "seat": 3}]
+    moved_out = [after[i] for i in in_way.values() if i and i not in blk.values()]
+    check("students in the way swap into the seats the group left", all(p in vac for p in moved_out) and len(moved_out) == len([i for i in in_way.values() if i]), moved_out)
+    check("nobody shares a seat after a block move", len({(p["row"], p["seat"]) for p in after.values()}) == len(after))
+    check("block moves are kept as fixed seats", all(S()["pins"].get(i) == after[i] for i in blk.values()))
+    check("selection clears after the move", pg.evaluate("() => window.__examRooms.ER.selection.length") == 0)
+    # drag one picked student: the whole group follows
+    grp = [who(5, 2)[0], who(5, 3)[0]]
+    pg.click(cell(5, 2), modifiers=["Control"]); pg.click(cell(5, 3), modifiers=["Control"])
+    pg.drag_and_drop(cell(5, 3), cell(9, 5))
+    after2 = M2()
+    check("dragging a picked student moves the whole group", after2[grp[1]] == {"row": 9, "seat": 5} and after2[grp[0]] == {"row": 9, "seat": 4}, (after2[grp[0]], after2[grp[1]]))
+    # a block that would fall off the room is refused
+    rows_n = S()["room"]["rows"]
+    pg.click(cell(9, 4), modifiers=["Control"]); pg.click(cell(9, 5), modifiers=["Control"])
+    before3 = M2()
+    pg.click(cell(rows_n, 1))   # first pick (Seat 4) -> Seat 1, second would be Seat 2: fits; use seat 20 to overflow
+    after3 = M2()
+    check("a block that fits at the room's edge moves", after3[grp[0]] == {"row": rows_n, "seat": 1} and after3[grp[1]] == {"row": rows_n, "seat": 2}, (after3[grp[0]], after3[grp[1]]))
+    pg.click(cell(rows_n, 1), modifiers=["Control"]); pg.click(cell(rows_n, 2), modifiers=["Control"])
+    before4 = M2()
+    pg.click(cell(rows_n, 20))  # Seat 1 -> 20 would put the other at Seat 21: outside the room
+    check("a block that would fall outside the room is refused, nothing moves", M2() == before4 and "do not fit there" in pg.inner_text("#er-root .er-body"))
+    pg.keyboard.press("Escape")
+    check("Esc clears the selection", pg.evaluate("() => window.__examRooms.ER.selection.length") == 0 and pg.locator("#er-root td.sel").count() == 0)
+
     # ---- room size on the chart step, before saving and documents ----
     check("room size can be changed on the seating chart", pg.locator("#er-root [data-roomsize] [data-bind='room.rows']").count() == 1
           and pg.locator("#er-root [data-roomsize] [data-bind='room.use']").count() == 1)

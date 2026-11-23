@@ -23,7 +23,8 @@ var ER = {
   step: 0,
   seaText: '',          // pasted SEA table, kept in memory only (it may contain reasons)
   data: { classes: {}, students: {} },
-  selected: null,       // seat-swap by clicking: first picked student id
+  selection: [],        // students picked on the seating chart (ids, in the order picked)
+  anchor: null,         // last student picked, for Shift-click ranges
   notice: '',           // message shown at the top of the current step
   root: null
 };
@@ -297,7 +298,7 @@ function erDuplicate() {
   var S = JSON.parse(JSON.stringify(ER.S));
   S.details.exam = S.details.exam ? S.details.exam + ' (copy)' : '';
   S.exemptText = ''; S.seaRows = []; S.seaStay = {}; S.matchChoice = {}; S.roster = {}; S.spareOverflow = false;
-  ER.S = S; ER.seaText = ''; ER.selected = null; ER.step = 0;
+  ER.S = S; ER.seaText = ''; ER.selection = []; ER.anchor = null; ER.step = 0;
   ER.notice = 'This is a copy for a new exam. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
     'and click "Get students from Compass". Then paste the new exempt and SEA lists. Save it when you are ready.';
 }
@@ -592,6 +593,12 @@ function erStepChart(model) {
     '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
     '<div><label>Seats to use in each row</label>' + erIn('room.use', ' type="number" min="1" max="60" style="width:70px"') + '</div></div>' +
     '<p class="er-muted">Change the room size here and the chart redraws straight away. Saving and the documents always use the chart exactly as it is shown.</p>';
+  if (ER.selection.length) {
+    h += '<div class="er-warn" data-selbar="1"><b>' + ER.selection.length + ' picked.</b> Click a seat to move ' + (ER.selection.length === 1 ? 'them' : 'them there together (the group keeps its shape)') +
+      ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button></div>';
+  }
+  h += '<p><b>Pick several students:</b> Ctrl-click (Cmd-click on a Mac) to add or remove one, or Shift-click to pick everyone in a block. ' +
+    'Then click a seat, or drag one of them, to move them all together. Anyone in the way swaps into the seats they left.</p>';
   h += '<p>Drag a student onto another seat to swap them (or onto an empty seat to move them). Or click one seat, then another. ' +
     'Moved students become fixed seats, so they stay put if you change anything else. Green outline = fixed.</p>';
   var grid = {};
@@ -605,7 +612,7 @@ function erStepChart(model) {
       var st = grid[row2 + '_' + seat], cls = [];
       if (seat > use) cls.push('spare');
       if (st && S.pins[st.id]) cls.push('pin');
-      if (st && ER.selected === st.id) cls.push('sel');
+      if (st && ER.selection.indexOf(st.id) >= 0) cls.push('sel');
       h += '<td class="' + cls.join(' ') + '" data-row="' + row2 + '" data-seat="' + seat + '"' +
         (st ? ' draggable="true" data-id="' + erEsc(st.id) + '" title="' + erEsc(st.first + ' ' + st.last + ' – ' + (model.groupOf[st.id] || '')) + '"><span>' + erEsc(st.first) + '</span><b>' + erEsc(st.last) + '</b>' : '>') + '</td>';
     }
@@ -678,9 +685,56 @@ function erMoveTo(id, row, seat) {
     if (from) ER.S.pins[other] = { row: from.row, seat: from.seat };
     else delete ER.S.pins[other];
   }
-  ER.selected = null;
+  ER.selection = []; ER.anchor = null;
   ER.notice = '';
   erRender();
+}
+
+/* Move several students together. `lead` lands on (row, seat); everyone else
+   keeps the same position relative to `lead`, so the block keeps its shape.
+   Students already in the destination seats swap into the seats the block
+   left behind. Nothing moves if any of the block would fall off the room. */
+function erMoveBlock(ids, lead, row, seat) {
+  var model = erBuildModel(), r = ER.S.room;
+  var rows = Number(r.rows), per = Number(r.seatsPerRow);
+  ids = ids.filter(function (id) { return model.seats[id]; });
+  if (!ids.length || !model.seats[lead]) return;
+  if (ids.length === 1) { erMoveTo(ids[0], row, seat); return; }
+  var base = model.seats[lead], dr = row - base.row, ds = seat - base.seat;
+  if (!dr && !ds) { ER.selection = []; ER.anchor = null; erRender(); return; }
+  var key = function (p) { return p.row + '_' + p.seat; };
+  var dest = {}, off = false;
+  ids.forEach(function (id) {
+    var p = model.seats[id], q = { row: p.row + dr, seat: p.seat + ds };
+    if (q.row < 1 || q.row > rows || q.seat < 1 || q.seat > per) off = true;
+    dest[id] = q;
+  });
+  if (off) {
+    ER.notice = 'Those ' + ids.length + ' students do not fit there: part of the group would be outside the room. Pick a seat further in.';
+    erRender(); return;
+  }
+  var inBlock = {}; ids.forEach(function (id) { inBlock[id] = 1; });
+  var newKeys = {}; ids.forEach(function (id) { newKeys[key(dest[id])] = 1; });
+  var order = function (a, b) { return a.row - b.row || a.seat - b.seat; };
+  // Seats the block leaves empty, and students in the way, both in reading order.
+  var vacated = ids.map(function (id) { return model.seats[id]; }).filter(function (p) { return !newKeys[key(p)]; }).sort(order);
+  var displaced = Object.keys(model.seats).filter(function (id) { return !inBlock[id] && newKeys[key(model.seats[id])]; })
+    .sort(function (a, b) { return order(model.seats[a], model.seats[b]); });
+  ids.forEach(function (id) { ER.S.pins[id] = { row: dest[id].row, seat: dest[id].seat }; });
+  displaced.forEach(function (id, i) { ER.S.pins[id] = { row: vacated[i].row, seat: vacated[i].seat }; });
+  ER.selection = []; ER.anchor = null;
+  ER.notice = 'Moved ' + ids.length + ' students' + (displaced.length ? ' (' + displaced.length + ' swapped into the seats they left)' : '') + '.';
+  erRender();
+}
+
+/* Everyone seated in the rectangle between two students (for Shift-click). */
+function erRangeIds(a, b) {
+  var model = erBuildModel(), p = model.seats[a], q = model.seats[b];
+  if (!p || !q) return [b];
+  var r1 = Math.min(p.row, q.row), r2 = Math.max(p.row, q.row), s1 = Math.min(p.seat, q.seat), s2 = Math.max(p.seat, q.seat);
+  return Object.keys(model.seats).filter(function (id) {
+    var x = model.seats[id]; return x.row >= r1 && x.row <= r2 && x.seat >= s1 && x.seat <= s2;
+  }).sort(function (m, n) { return model.seats[m].row - model.seats[n].row || model.seats[m].seat - model.seats[n].seat; });
 }
 
 function erHandle(e) {
@@ -737,15 +791,30 @@ function erHandle(e) {
       return;
     }
     else if (act === 'downloadAll') { erDownloadAll(); return; }
+    else if (act === 'clearSel') { ER.selection = []; ER.anchor = null; }
     erRender();
     return;
   }
-  // Seating chart: click one seat, then another.
+  // Seating chart. Ctrl/Cmd-click adds or removes a student; Shift-click picks
+  // everyone in the rectangle from the last pick. A plain click on a seat moves
+  // what is picked there (one student, or the whole group keeping its shape).
   var cell = e.target.closest('.er-grid td[data-row]');
   if (cell) {
-    var id = cell.getAttribute('data-id');
-    if (ER.selected) erMoveTo(ER.selected, Number(cell.getAttribute('data-row')), Number(cell.getAttribute('data-seat')));
-    else if (id) { ER.selected = id; erRender(); }
+    var id = cell.getAttribute('data-id'), row = Number(cell.getAttribute('data-row')), seat = Number(cell.getAttribute('data-seat'));
+    var sel = ER.selection;
+    if ((e.ctrlKey || e.metaKey) && id) {
+      var k = sel.indexOf(id);
+      if (k >= 0) sel.splice(k, 1); else { sel.push(id); ER.anchor = id; }
+      erRender(); return;
+    }
+    if (e.shiftKey && id) {
+      erRangeIds(ER.anchor || id, id).forEach(function (x) { if (sel.indexOf(x) < 0) sel.push(x); });
+      ER.anchor = ER.anchor || id;
+      erRender(); return;
+    }
+    if (!sel.length) { if (id) { ER.selection = [id]; ER.anchor = id; erRender(); } return; }
+    if (id && sel.indexOf(id) >= 0) { ER.selection = []; ER.anchor = null; erRender(); return; }   // click a picked student: un-pick
+    erMoveBlock(sel.slice(), sel[0], row, seat);
   }
 }
 
@@ -787,10 +856,14 @@ function erStart() {
   root.addEventListener('click', erHandle);
   root.addEventListener('input', erInput);
   root.addEventListener('change', erInput);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && ER.selection.length && ER.root && ER.root.style.display !== 'none') { ER.selection = []; ER.anchor = null; erRender(); }
+  });
   root.addEventListener('dragstart', function (e) {
     var td = e.target.closest && e.target.closest('td[data-id]');
     if (!td) return;
     e.dataTransfer.setData('text/plain', td.getAttribute('data-id'));
+    ER.dragging = td.getAttribute('data-id');
     e.dataTransfer.effectAllowed = 'move';
   });
   root.addEventListener('dragover', function (e) {
@@ -805,8 +878,12 @@ function erStart() {
     var td = e.target.closest && e.target.closest('.er-grid td[data-row]');
     if (!td) return;
     e.preventDefault();
-    var id = e.dataTransfer.getData('text/plain');
-    if (id) erMoveTo(id, Number(td.getAttribute('data-row')), Number(td.getAttribute('data-seat')));
+    var id = e.dataTransfer.getData('text/plain') || ER.dragging;
+    ER.dragging = null;
+    if (!id) return;
+    var r = Number(td.getAttribute('data-row')), s = Number(td.getAttribute('data-seat'));
+    if (ER.selection.length > 1 && ER.selection.indexOf(id) >= 0) erMoveBlock(ER.selection.slice(), id, r, s);
+    else erMoveTo(id, r, s);
   });
   erRender();
 }
