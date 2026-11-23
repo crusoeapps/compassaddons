@@ -94,7 +94,7 @@ It always loads the latest version. It is not on the tools web page.
 4. **SEA students**: paste the table (First name, Last name, Form, Reason, Provision). Reasons are only used to read the table: never shown, printed or saved. Tick anyone who stays in the main room.
 5. **Fixed seats** and 6. **Name fixes** (optional).
 7. **Seating chart**: fix anything marked **Please confirm** or **Not found** (nothing is guessed). If students don't fit, choose one of the offered options. You can change **Rows**, **Seats per row** and **Seats to use** right here and the chart redraws straight away. Drag a student onto another seat to swap them, or click one seat and then another. Moves are kept. Saving and the documents always use the chart exactly as it is shown.
-8. **Documents**: **Print / Save as PDF** for each one, or **Download all**.
+8. **Documents**: **Print / Save as PDF** for each one, or **Download all**: the seat grid for the room, the master list (everyone A–Z with room, row and seat), the SEA Room list, the exempt list, and the exam rolls (one page per class).
 
 **Save and come back later.** **Save session file** (top right) downloads one `.json` file. Next time, **Open saved file**: it restores everything and re-reads the class lists from Compass, then tells you who has joined or left since you saved. Your fixed seats and moves are kept. The same file also opens in the Exam Seating Manager (**Open file**).
 

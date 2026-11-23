@@ -500,6 +500,16 @@ function erDocSEA(st, model) {
 }
 
 /* 4. Exam rolls: one page per class, exempt students greyed. */
+/* Exempt students: A\u2013Z, with their classes. Not seated; marked <Exempt> on the rolls. */
+function erDocExempt(st, model) {
+  var list = Object.keys(model.exempt).map(function (id) { return model.students[id]; }).filter(Boolean).sort(erCompareNames);
+  var t = '<table class="list"><thead><tr><th>First name</th><th>Last name</th><th>Class</th></tr></thead><tbody>';
+  list.forEach(function (s) { t += '<tr>' + erNameCells(s) + '<td>' + erEsc(s.classes.join(', ')) + '</td></tr>'; });
+  if (!list.length) t += '<tr><td colspan="3">No exempt students.</td></tr>';
+  t += '</tbody></table>';
+  return erDoc('Exempt list', erHeader(st, 'Exempt Students') + t, true);
+}
+
 function erRollPage(st, model, code) {
   var cls = model.classes[code] || {};
   var sessions = (st.details.sessions || []).filter(function (x) { return x.label; });
@@ -941,6 +951,7 @@ function erDocsFor(model) {
     { key: 'grid', label: 'Seat grid (' + (S.room.name || 'exam room') + ')', file: erFileName(S, (S.room.name || 'Exam room') + ' seat grid', 'html'), html: erDocSeatGrid(S, model) },
     { key: 'master', label: 'Master list', file: erFileName(S, 'Master list', 'html'), html: erDocMaster(S, model) },
     { key: 'sea', label: 'SEA Room list', file: erFileName(S, 'SEA Room list', 'html'), html: erDocSEA(S, model) },
+    { key: 'exempt', label: 'Exempt list', file: erFileName(S, 'Exempt list', 'html'), html: erDocExempt(S, model) },
     { key: 'rolls', label: 'Exam rolls (one page per class)', file: erFileName(S, 'Exam rolls', 'html'), html: erDocRolls(S, model) }
   ];
 }

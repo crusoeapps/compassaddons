@@ -334,6 +334,12 @@ with sync_playwright() as pw:
     check("seat grid footer lists groups", "Advanced Maths – Row 1 Seat 1 to" in text(grid) and "students)" in text(grid))
     check("master list columns", headers(master) == ["First name", "Last name", "Room", "Row", "Seat"], headers(master))
     check("SEA list columns", headers(sea) == ["First name", "Last name", "Class", "Room", "Arrangements"], headers(sea))
+    ex_doc = docs["exempt"]["html"]
+    check("exempt list columns", headers(ex_doc) == ["First name", "Last name", "Class"], headers(ex_doc))
+    ex_last = [text(x).strip() for x in re.findall(r'<td class="last">(.*?)</td>', ex_doc, re.S)]
+    want_last = sorted(model["students"][i]["last"] for i in model["exempt"])
+    check("exempt list has every exempt student, A-Z, and nobody else", ex_last == want_last, (ex_last, want_last))
+    check("exempt list title", "Crusoe College — Exempt Students" in text(ex_doc) and "size: A4 portrait" in ex_doc)
     roll_heads = headers(rolls)
     check("roll columns, one tick column per session", roll_heads == ["#", "First name", "Last name", "Mon 16 Nov AM", "Mon 16 Nov PM"], roll_heads)
     check("one roll page per class code found", len(re.findall(r'class="page"', rolls)) == len(CLASSES), len(re.findall(r'class="page"', rolls)))
@@ -432,13 +438,13 @@ with sync_playwright() as pw:
     # ---- download all ----
     pg.click("#er-root [data-act='go'][data-i='7']")
     names = []
-    for _ in range(5):
+    for _ in range(6):
         with pg.expect_download() as dl:
             if not names: pg.click("#er-root [data-act='downloadAll']")
         names.append(dl.value.suggested_filename)
-    check("download all saves 4 documents and the plan", sorted(names) == sorted([
+    check("download all saves 5 documents and the plan", sorted(names) == sorted([
         "Semester 2 Exam - BSSC Gym seat grid.html", "Semester 2 Exam - Master list.html", "Semester 2 Exam - SEA Room list.html",
-        "Semester 2 Exam - Exam rolls.html", "Semester 2 Exam - Exam Seating plan.json"]), names)
+        "Semester 2 Exam - Exempt list.html", "Semester 2 Exam - Exam rolls.html", "Semester 2 Exam - Exam Seating plan.json"]), names)
     # print uses a hidden iframe
     pg.evaluate("document.querySelectorAll('iframe').forEach(function (f) { f.remove(); })")
     pg.evaluate("window.print = function () {}")

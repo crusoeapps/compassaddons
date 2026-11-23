@@ -370,6 +370,7 @@ function erDocsFor(model) {
     { key: 'grid', label: 'Seat grid (' + (S.room.name || 'exam room') + ')', file: erFileName(S, (S.room.name || 'Exam room') + ' seat grid', 'html'), html: erDocSeatGrid(S, model) },
     { key: 'master', label: 'Master list', file: erFileName(S, 'Master list', 'html'), html: erDocMaster(S, model) },
     { key: 'sea', label: 'SEA Room list', file: erFileName(S, 'SEA Room list', 'html'), html: erDocSEA(S, model) },
+    { key: 'exempt', label: 'Exempt list', file: erFileName(S, 'Exempt list', 'html'), html: erDocExempt(S, model) },
     { key: 'rolls', label: 'Exam rolls (one page per class)', file: erFileName(S, 'Exam rolls', 'html'), html: erDocRolls(S, model) }
   ];
 }
