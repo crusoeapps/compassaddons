@@ -606,6 +606,8 @@ var ER = {
   data: { classes: {}, students: {} },
   selection: [],        // students picked on the seating chart (ids, in the order picked)
   anchor: null,         // last student picked, for Shift-click ranges
+  undo: [],             // seating-chart history: [{ label, state }], newest last
+  roomSnap: null,       // chart state when a room-size box gained focus
   notice: '',           // message shown at the top of the current step
   root: null
 };
@@ -879,7 +881,7 @@ function erDuplicate() {
   var S = JSON.parse(JSON.stringify(ER.S));
   S.details.exam = S.details.exam ? S.details.exam + ' (copy)' : '';
   S.exemptText = ''; S.seaRows = []; S.seaStay = {}; S.matchChoice = {}; S.roster = {}; S.spareOverflow = false;
-  ER.S = S; ER.seaText = ''; ER.selection = []; ER.anchor = null; ER.step = 0;
+  ER.S = S; ER.seaText = ''; ER.selection = []; ER.anchor = null; ER.undo = []; ER.step = 0;
   ER.notice = 'This is a copy for a new exam. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
     'and click "Get students from Compass". Then paste the new exempt and SEA lists. Save it when you are ready.';
 }
@@ -915,6 +917,7 @@ async function erOpenText(text) {
   }
   var old = f.examRooms.roster || {};
   ER.S = Object.assign(erNewState(), f.examRooms);
+  ER.undo = []; ER.selection = []; ER.anchor = null;
   ER.seaText = erSeaRowsToText(ER.S.seaRows);
   ER.step = 6;
   ER.notice = 'Reading the latest class lists from Compass\u2026';
@@ -1169,6 +1172,10 @@ function erStepChart(model) {
   model.both.forEach(function (st) {
     h += '<div class="er-warn"><b>' + erEsc(st.first + ' ' + st.last) + '</b> is on both the exempt list and the SEA list. Remove them from one of the lists.</div>';
   });
+  var lastUndo = ER.undo[ER.undo.length - 1];
+  h += '<p><button class="er-btn" data-act="undo"' + (lastUndo ? ' title="Undo ' + erEsc(lastUndo.label) + ' (Ctrl+Z)"' : ' disabled') + '>&#8630; Undo' +
+    (lastUndo ? ' ' + erEsc(lastUndo.label) : '') + '</button> <span class="er-muted">' +
+    (ER.undo.length ? ER.undo.length + ' change' + (ER.undo.length === 1 ? '' : 's') + ' can be undone (Ctrl+Z / Cmd+Z)' : 'Nothing to undo yet') + '</span></p>';
   h += '<div class="er-row" data-roomsize="1">' +
     '<div><label>Rows</label>' + erIn('room.rows', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
     '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
@@ -1257,10 +1264,36 @@ function erSet(path, value) {
 }
 
 /* Move a student to a seat by fixing them there; whoever was there swaps. */
+/* ---------- undo on the seating chart ----------
+   Everything that can be changed from the chart (moves, room size, the
+   "doesn't fit" fixes) is snapshotted before it happens, so it can be undone
+   step by step. History lives in memory only and resets on Duplicate/Open. */
+var ER_UNDO_MAX = 50;
+function erChartSnapshot() {
+  var S = ER.S;
+  return JSON.stringify({ pins: S.pins, room: S.room, spareOverflow: S.spareOverflow, gaps: S.groups.map(function (g) { return g.gap; }) });
+}
+function erRememberChart(label, state) {
+  ER.undo.push({ label: label, state: state || erChartSnapshot() });
+  if (ER.undo.length > ER_UNDO_MAX) ER.undo.shift();
+}
+function erUndo() {
+  var u = ER.undo.pop();
+  if (!u) return;
+  var st = JSON.parse(u.state), S = ER.S;
+  S.pins = st.pins; S.room = st.room; S.spareOverflow = st.spareOverflow;
+  st.gaps.forEach(function (g, i) { if (S.groups[i]) S.groups[i].gap = g; });
+  ER.selection = []; ER.anchor = null;
+  ER.notice = 'Undone: ' + u.label + '.';
+  erRender();
+}
+
 function erMoveTo(id, row, seat) {
   var model = erBuildModel(), from = model.seats[id];
   var other = Object.keys(model.seats).filter(function (k) { return model.seats[k].row === row && model.seats[k].seat === seat; })[0];
   if (other === id) return;
+  var who = model.students[id];
+  erRememberChart('moving ' + (who ? who.first + ' ' + who.last : 'a student'));
   ER.S.pins[id] = { row: row, seat: seat };
   if (other) {
     if (from) ER.S.pins[other] = { row: from.row, seat: from.seat };
@@ -1301,6 +1334,7 @@ function erMoveBlock(ids, lead, row, seat) {
   var vacated = ids.map(function (id) { return model.seats[id]; }).filter(function (p) { return !newKeys[key(p)]; }).sort(order);
   var displaced = Object.keys(model.seats).filter(function (id) { return !inBlock[id] && newKeys[key(model.seats[id])]; })
     .sort(function (a, b) { return order(model.seats[a], model.seats[b]); });
+  erRememberChart('moving ' + ids.length + ' students');
   ids.forEach(function (id) { ER.S.pins[id] = { row: dest[id].row, seat: dest[id].seat }; });
   displaced.forEach(function (id, i) { ER.S.pins[id] = { row: vacated[i].row, seat: vacated[i].seat }; });
   ER.selection = []; ER.anchor = null;
@@ -1350,9 +1384,10 @@ function erHandle(e) {
       var w = ER.root.querySelector('#er-ov-who').value, l = ER.root.querySelector('#er-ov-last').value.trim();
       if (!w || !l) ER.notice = 'Choose a student and type the surname to print.'; else S.overrides[w] = l.toUpperCase();
     }
-    else if (act === 'fitUse') S.room.use = S.room.seatsPerRow;
-    else if (act === 'fitGaps') S.groups.forEach(function (g) { g.gap = 'seat'; });
-    else if (act === 'fitSpare') S.spareOverflow = true;
+    else if (act === 'fitUse') { erRememberChart('using all seats in each row'); S.room.use = S.room.seatsPerRow; }
+    else if (act === 'fitGaps') { erRememberChart('one-seat gaps between groups'); S.groups.forEach(function (g) { g.gap = 'seat'; }); }
+    else if (act === 'fitSpare') { erRememberChart('using the spare seats'); S.spareOverflow = true; }
+    else if (act === 'undo') { erUndo(); return; }
     else if (act === 'save') { erSaveSession(); return; }
     else if (act === 'duplicate') {
       if (!window.confirm('Start a new exam from a copy of this one?\n\n' +
@@ -1402,7 +1437,13 @@ function erHandle(e) {
 function erInput(e) {
   var el = e.target;
   if (el.hasAttribute('data-bind')) {
+    var sizeBox = el.closest && el.closest('[data-roomsize]');
+    if (sizeBox && !ER.roomSnap) ER.roomSnap = erChartSnapshot();
     erSet(el.getAttribute('data-bind'), el.value);
+    if (sizeBox && e.type === 'change') {
+      if (ER.roomSnap !== erChartSnapshot()) erRememberChart('changing the room size', ER.roomSnap);
+      ER.roomSnap = null;
+    }
     // Re-render only for things that change other parts of the step.
     if (e.type === 'change') erRender();
   } else if (el.hasAttribute('data-sea')) {
@@ -1438,6 +1479,9 @@ function erStart() {
   root.addEventListener('input', erInput);
   root.addEventListener('change', erInput);
   document.addEventListener('keydown', function (e) {
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing &&
+        ER.step === 6 && ER.undo.length && ER.root && ER.root.style.display !== 'none') { e.preventDefault(); erUndo(); return; }
     if (e.key === 'Escape' && ER.selection.length && ER.root && ER.root.style.display !== 'none') { ER.selection = []; ER.anchor = null; erRender(); }
   });
   root.addEventListener('dragstart', function (e) {

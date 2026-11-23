@@ -350,6 +350,25 @@ with sync_playwright() as pw:
     pg.keyboard.press("Escape")
     check("Esc clears the selection", pg.evaluate("() => window.__examRooms.ER.selection.length") == 0 and pg.locator("#er-root td.sel").count() == 0)
 
+    # ---- undo on the chart ----
+    U = lambda: pg.evaluate("() => window.__examRooms.ER.undo.length")
+    n_undo = U()
+    check("every move can be undone (history kept)", n_undo >= 5, n_undo)
+    check("the refused move did not add an undo step", pg.evaluate("() => window.__examRooms.ER.undo[window.__examRooms.ER.undo.length - 1].label") == "moving 2 students")
+    check("Undo button names the last change", "Undo moving 2 students" in pg.inner_text("#er-root [data-act='undo']"))
+    pg.click("#er-root [data-act='undo']")
+    u1 = M2()
+    check("Undo puts the group back where it was", u1[grp[0]] == {"row": 9, "seat": 4} and u1[grp[1]] == {"row": 9, "seat": 5}, (u1[grp[0]], u1[grp[1]]))
+    check("...and says what was undone", "Undone: moving 2 students" in pg.inner_text("#er-root .er-body") and U() == n_undo - 1)
+    pg.keyboard.press("Control+z")
+    u2 = M2()
+    check("Ctrl+Z undoes the step before (the dragged group)", u2[grp[0]] == {"row": 5, "seat": 2} and u2[grp[1]] == {"row": 5, "seat": 3}, (u2[grp[0]], u2[grp[1]]))
+    pg.keyboard.press("Control+z")
+    u3 = M2()
+    check("undoing the 2x2 block move restores everyone, swaps included",
+          all(u3[blk[(r, s_)]] == {"row": r, "seat": s_} for (r, s_) in blk) and len({(p["row"], p["seat"]) for p in u3.values()}) == len(u3))
+    check("Undo leaves nobody sharing a seat", len({(p["row"], p["seat"]) for p in M2().values()}) == len(M2()))
+
     # ---- room size on the chart step, before saving and documents ----
     check("room size can be changed on the seating chart", pg.locator("#er-root [data-roomsize] [data-bind='room.rows']").count() == 1
           and pg.locator("#er-root [data-roomsize] [data-bind='room.use']").count() == 1)
@@ -367,6 +386,16 @@ with sync_playwright() as pw:
     pg.fill("#er-root [data-roomsize] [data-bind='room.rows']", str(rows0)); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.rows']", "change")
     pg.fill("#er-root [data-roomsize] [data-bind='room.use']", "17"); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.use']", "change")
     check("...and back again", chart_rows() == rows0 and chart_spares() == spares0)
+    pg.click("#er-root [data-act='undo']")
+    check("Undo reverses a room-size change", S()["room"]["use"] == 18 and chart_rows() == rows0, S()["room"])
+    pg.click("#er-root [data-act='undo']")
+    check("...one change at a time", chart_rows() == rows0 + 1, chart_rows())
+    n_before = U()
+    pg.focus("#er-root [data-roomsize] [data-bind='room.rows']"); pg.keyboard.press("Control+z")
+    check("Ctrl+Z inside a box is left to the box, not the chart", U() == n_before and chart_rows() == rows0 + 1)
+    pg.fill("#er-root [data-roomsize] [data-bind='room.rows']", str(rows0)); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.rows']", "change")
+    pg.fill("#er-root [data-roomsize] [data-bind='room.use']", "17"); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.use']", "change")
+    check("room restored for the rest of the run", chart_rows() == rows0 and chart_spares() == spares0)
 
     # ---- documents ----
     docs = {d["key"]: d for d in pg.evaluate("() => window.__examRooms.docs()")}
@@ -510,6 +539,7 @@ with sync_playwright() as pw:
           dup["details"]["sessions"] == before["details"]["sessions"] and dup["pins"] == before["pins"] and dup["overrides"] == before["overrides"])
     check("duplicate marks the new exam as a copy", dup["details"]["exam"] == before["details"]["exam"] + " (copy)", dup["details"]["exam"])
     check("duplicate clears the exempt and SEA lists", dup["exemptText"] == "" and dup["seaRows"] == [] and dup["seaStay"] == {} and dup["matchChoice"] == {})
+    check("duplicate starts with an empty undo history", pg.evaluate("() => window.__examRooms.ER.undo.length") == 0)
     check("duplicate goes back to step 1 with instructions", pg.evaluate("() => window.__examRooms.ER.step") == 0 and "copy for a new exam" in pg.inner_text("#er-root .er-note"))
     check("the copy seats everyone again without reloading Compass",
           pg.evaluate("() => { var m = window.__examRooms.model(); return Object.keys(m.seats).length > 0 && m.classProblems.length === 0 && Object.keys(m.exempt).length === 0; }"))
