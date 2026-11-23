@@ -304,6 +304,24 @@ with sync_playwright() as pw:
     check("click-then-click moves a student to an empty seat", m3[b_id] == {"row": 1, "seat": 18}, m3[b_id])
     check("moves are kept as fixed seats", S()["pins"].get(b_id) == {"row": 1, "seat": 18})
 
+    # ---- room size on the chart step, before saving and documents ----
+    check("room size can be changed on the seating chart", pg.locator("#er-root [data-roomsize] [data-bind='room.rows']").count() == 1
+          and pg.locator("#er-root [data-roomsize] [data-bind='room.use']").count() == 1)
+    def chart_rows(): return pg.evaluate("() => document.querySelectorAll('#er-root table.er-grid tr:first-child th').length - 1")
+    def chart_spares(): return pg.locator("#er-root table.er-grid td.spare").count()
+    M2 = lambda: pg.evaluate("() => JSON.parse(JSON.stringify(window.__examRooms.model().seats))")
+    rows0, spares0 = chart_rows(), chart_spares()
+    pg.fill("#er-root [data-roomsize] [data-bind='room.rows']", str(rows0 + 1)); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.rows']", "change")
+    check("changing rows on the chart redraws it straight away", chart_rows() == rows0 + 1 and S()["room"]["rows"] == rows0 + 1, (rows0, chart_rows()))
+    pg.fill("#er-root [data-roomsize] [data-bind='room.use']", "18"); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.use']", "change")
+    check("changing seats to use on the chart redraws the spares", chart_spares() < spares0 and S()["room"]["use"] == 18, (spares0, chart_spares()))
+    check("moved students stay put when the room is resized", M2()[b_id] == {"row": 1, "seat": 18} and M2()[a_id] == {"row": 1, "seat": 2})
+    g2 = pg.evaluate("() => window.__examRooms.docs()")[0]["html"]
+    check("the documents use the resized room", g2.count("<th>Row ") == rows0 + 1, g2.count("<th>Row "))
+    pg.fill("#er-root [data-roomsize] [data-bind='room.rows']", str(rows0)); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.rows']", "change")
+    pg.fill("#er-root [data-roomsize] [data-bind='room.use']", "17"); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.use']", "change")
+    check("...and back again", chart_rows() == rows0 and chart_spares() == spares0)
+
     # ---- documents ----
     docs = {d["key"]: d for d in pg.evaluate("() => window.__examRooms.docs()")}
     def text(h): return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h.replace("&lt;", "<").replace("&gt;", ">").replace("&#39;", "'").replace("&amp;", "&")))
@@ -316,6 +334,12 @@ with sync_playwright() as pw:
     check("seat grid footer lists groups", "Advanced Maths – Row 1 Seat 1 to" in text(grid) and "students)" in text(grid))
     check("master list columns", headers(master) == ["First name", "Last name", "Room", "Row", "Seat"], headers(master))
     check("SEA list columns", headers(sea) == ["First name", "Last name", "Class", "Room", "Arrangements"], headers(sea))
+    ex_doc = docs["exempt"]["html"]
+    check("exempt list columns", headers(ex_doc) == ["First name", "Last name", "Class"], headers(ex_doc))
+    ex_last = [text(x).strip() for x in re.findall(r'<td class="last">(.*?)</td>', ex_doc, re.S)]
+    want_last = sorted(model["students"][i]["last"] for i in model["exempt"])
+    check("exempt list has every exempt student, A-Z, and nobody else", ex_last == want_last, (ex_last, want_last))
+    check("exempt list title", "Crusoe College — Exempt Students" in text(ex_doc) and "size: A4 portrait" in ex_doc)
     roll_heads = headers(rolls)
     check("roll columns, one tick column per session", roll_heads == ["#", "First name", "Last name", "Mon 16 Nov AM", "Mon 16 Nov PM"], roll_heads)
     check("one roll page per class code found", len(re.findall(r'class="page"', rolls)) == len(CLASSES), len(re.findall(r'class="page"', rolls)))
@@ -414,13 +438,13 @@ with sync_playwright() as pw:
     # ---- download all ----
     pg.click("#er-root [data-act='go'][data-i='7']")
     names = []
-    for _ in range(5):
+    for _ in range(6):
         with pg.expect_download() as dl:
             if not names: pg.click("#er-root [data-act='downloadAll']")
         names.append(dl.value.suggested_filename)
-    check("download all saves 4 documents and the plan", sorted(names) == sorted([
+    check("download all saves 5 documents and the plan", sorted(names) == sorted([
         "Semester 2 Exam - BSSC Gym seat grid.html", "Semester 2 Exam - Master list.html", "Semester 2 Exam - SEA Room list.html",
-        "Semester 2 Exam - Exam rolls.html", "Semester 2 Exam - Exam Seating plan.json"]), names)
+        "Semester 2 Exam - Exempt list.html", "Semester 2 Exam - Exam rolls.html", "Semester 2 Exam - Exam Seating plan.json"]), names)
     # print uses a hidden iframe
     pg.evaluate("document.querySelectorAll('iframe').forEach(function (f) { f.remove(); })")
     pg.evaluate("window.print = function () {}")
@@ -428,6 +452,22 @@ with sync_playwright() as pw:
     check("print opens the document in a hidden iframe", "Master List" in (pg.evaluate("() => { var f = document.querySelector('iframe'); return f ? f.contentDocument.body.innerText : ''; }") or ""))
 
     check("only Compass was contacted", external == [], external[:5])
+    # ---- duplicate exam ----
+    before = S()
+    pg.once("dialog", lambda d: d.dismiss())
+    pg.click("#er-root [data-act='duplicate']")
+    check("duplicate asks first; Cancel changes nothing", S() == before)
+    pg.once("dialog", lambda d: d.accept())
+    pg.click("#er-root [data-act='duplicate']")
+    dup = S()
+    check("duplicate copies the setup", dup["room"] == before["room"] and dup["groups"] == before["groups"] and
+          dup["details"]["sessions"] == before["details"]["sessions"] and dup["pins"] == before["pins"] and dup["overrides"] == before["overrides"])
+    check("duplicate marks the new exam as a copy", dup["details"]["exam"] == before["details"]["exam"] + " (copy)", dup["details"]["exam"])
+    check("duplicate clears the exempt and SEA lists", dup["exemptText"] == "" and dup["seaRows"] == [] and dup["seaStay"] == {} and dup["matchChoice"] == {})
+    check("duplicate goes back to step 1 with instructions", pg.evaluate("() => window.__examRooms.ER.step") == 0 and "copy for a new exam" in pg.inner_text("#er-root .er-note"))
+    check("the copy seats everyone again without reloading Compass",
+          pg.evaluate("() => { var m = window.__examRooms.model(); return Object.keys(m.seats).length > 0 && m.classProblems.length === 0 && Object.keys(m.exempt).length === 0; }"))
+
     check("no JavaScript errors", errors == [], errors[:3])
     browser.close()
 
