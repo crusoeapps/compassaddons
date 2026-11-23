@@ -290,6 +290,18 @@ function erSaveState() {
   return S;
 }
 
+/* Start the next exam from a copy of this one. Keeps the setup (details,
+   sessions, room, groups, gaps, fixed seats, name fixes) and the class lists
+   already read from Compass; clears the lists that belong to one exam. */
+function erDuplicate() {
+  var S = JSON.parse(JSON.stringify(ER.S));
+  S.details.exam = S.details.exam ? S.details.exam + ' (copy)' : '';
+  S.exemptText = ''; S.seaRows = []; S.seaStay = {}; S.matchChoice = {}; S.roster = {}; S.spareOverflow = false;
+  ER.S = S; ER.seaText = ''; ER.selected = null; ER.step = 0;
+  ER.notice = 'This is a copy for a new exam. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
+    'and click "Get students from Compass". Then paste the new exempt and SEA lists. Save it when you are ready.';
+}
+
 function erSaveSession() {
   var model = erBuildModel();
   var file = erPlanFile(ER.S, model, erSaveState());
@@ -574,6 +586,11 @@ function erStepChart(model) {
   model.both.forEach(function (st) {
     h += '<div class="er-warn"><b>' + erEsc(st.first + ' ' + st.last) + '</b> is on both the exempt list and the SEA list. Remove them from one of the lists.</div>';
   });
+  h += '<div class="er-row" data-roomsize="1">' +
+    '<div><label>Rows</label>' + erIn('room.rows', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
+    '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
+    '<div><label>Seats to use in each row</label>' + erIn('room.use', ' type="number" min="1" max="60" style="width:70px"') + '</div></div>' +
+    '<p class="er-muted">Change the room size here and the chart redraws straight away. Saving and the documents always use the chart exactly as it is shown.</p>';
   h += '<p>Drag a student onto another seat to swap them (or onto an empty seat to move them). Or click one seat, then another. ' +
     'Moved students become fixed seats, so they stay put if you change anything else. Green outline = fixed.</p>';
   var grid = {};
@@ -634,6 +651,7 @@ function erRenderNow() {
   var keepScroll = root.querySelector('.er-body') ? root.querySelector('.er-body').scrollTop : 0;
   root.innerHTML = '<div class="er-card"><div class="er-head"><strong>Exam Rooms</strong>' +
     '<button class="er-btn" data-act="open">Open saved file</button><button class="er-btn" data-act="save">Save session file</button>' +
+    '<button class="er-btn" data-act="duplicate" title="Start the next exam from a copy of this one">Duplicate exam</button>' +
     '<button class="er-btn" data-act="close" aria-label="Close">Close</button></div>' +
     '<div class="er-steps">' + ER_STEPS.map(function (s, i) { return '<button data-act="go" data-i="' + i + '" class="' + (i === ER.step ? 'on' : '') + '">' + (i + 1) + '. ' + erEsc(s) + '</button>'; }).join('') + '</div>' +
     '<div class="er-body">' + (ER.notice ? '<div class="er-note">' + erEsc(ER.notice) + '</div>' : '') + '<h2 style="margin:0 0 6px;font-size:18px">' + erEsc(ER_STEPS[ER.step]) + '</h2>' + body + '</div>' +
@@ -700,6 +718,13 @@ function erHandle(e) {
     else if (act === 'fitGaps') S.groups.forEach(function (g) { g.gap = 'seat'; });
     else if (act === 'fitSpare') S.spareOverflow = true;
     else if (act === 'save') { erSaveSession(); return; }
+    else if (act === 'duplicate') {
+      if (!window.confirm('Start a new exam from a copy of this one?\n\n' +
+          'Copied: exam details, sessions, room, groups and gaps, fixed seats and name fixes.\n' +
+          'Cleared: the exempt and SEA lists.\n\n' +
+          'This exam is not kept unless you have saved it (Save session file).')) return;
+      erDuplicate();
+    }
     else if (act === 'open') { erOpenSession(); return; }
     else if (act === 'print') {
       var d = erDocsFor(erBuildModel()).filter(function (x) { return x.key === t.getAttribute('data-doc'); })[0];
