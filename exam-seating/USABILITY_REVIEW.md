@@ -2,6 +2,8 @@
 
 *27 November 2026. Reviewed against `master` at 29234f7, using only the fictional `test-data/` and the fake Compass from `exam-rooms.test.py` (extended with the four fictional 10ENG classes). Every task was done in Chromium at 1366×768 by clicking, typing and dragging, the way a coordinator would. Screenshots were kept out of the repo.*
 
+> **Update (27 Nov 2026):** T1, T2 and T3 are fixed. Rolls show Room / Seat with SEA students marked "SEA Room". Grid names are never below 6 pt and long names go onto two lines. Unsaved changes are shown in the top bar and the browser asks before you leave. Also, **Duplicate exam** now asks whether to start with **fresh seating** (the default) or **keep this exam's seating**. Covered by 17 new checks (179/179 pass).
+
 ## Verdict
 
 **Nearly ready, but not yet for a real exam without a coordinator double-checking two things.**

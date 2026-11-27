@@ -20,12 +20,15 @@ function erDocCSS() {
     .split('"DM Serif Display", Georgia, serif').join(ER_FONT) +
     'table.list td.last { font-weight: 700; text-transform: uppercase; }' +
     '.foot { margin-top: 4mm; font-size: 8pt; line-height: 1.5; }' +
+    'body { padding: 4mm 6mm; }' +
     '.page { page-break-after: always; break-after: page; }' +
     '.page:last-child { page-break-after: auto; break-after: auto; }' +
     '.teacher { float: right; font-size: 24pt; font-weight: 700; color: #1a2540; line-height: 1; }' +
     'table.roll td { text-align: left; font-size: 9pt; padding: 5px 6px; }' +
     'table.roll th { text-align: left; font-size: 8pt; padding: 4px 6px; }' +
     'table.roll td.box { text-align: center; }' +
+    'table.roll td.where { white-space: nowrap; font-size: 8.5pt; }' +
+    'table.roll td.where.sea { font-weight: 700; }' +
     'table.roll tr.exempt td { background: #ececec; color: #888; }' +
     'table.roll td.exemptbox { text-align: center; font-style: italic; color: #777; letter-spacing: 1px; }' +
     '.sig { margin-top: 10mm; font-size: 9pt; }' +
@@ -51,6 +54,30 @@ function erShortSession(label) {
 }
 
 /* 1. Seat grid: rows across the page, seats down, A4 landscape. */
+/* A name in a grid box: shrink to fit, but never below a readable minimum.
+   Names that would need to be smaller wrap onto two lines instead
+   (breaking after hyphens and spaces first). */
+var ER_MIN_PT = 6;
+function erPt(style) { var m = /font-size:([0-9.]+)pt/.exec(style); return m ? Number(m[1]) : null; }
+function erGridName(text, cls, basePt, avail, bold, upper) {
+  var style = fitStyle(text, basePt, avail, bold, upper, ER_FONT), pt = erPt(style);
+  if (pt === null || pt >= ER_MIN_PT) return '<span class="' + cls + '"' + style + '>' + erEsc(text) + '</span>';
+  // Too long for one line at a readable size: split into two lines at the
+  // hyphen or space that best balances them, each line shrunk to fit.
+  var s = String(text), best = null;
+  for (var i = 1; i < s.length; i++) {
+    if (s[i - 1] !== '-' && s[i - 1] !== ' ') continue;
+    var a = s.slice(0, i).replace(/ $/, ''), b = s.slice(i);
+    var size = Math.min(erPt(fitStyle(a, basePt, avail, bold, upper, ER_FONT)) || basePt, erPt(fitStyle(b, basePt, avail, bold, upper, ER_FONT)) || basePt);
+    if (!best || size > best.size) best = { a: a, b: b, size: size };
+  }
+  var two = best ? erEsc(best.a) + '<br>' + erEsc(best.b) : erEsc(s);
+  var size2 = best ? Math.max(ER_MIN_PT, Math.floor(best.size * 10) / 10) : ER_MIN_PT;
+  // If even two lines need less than the minimum, keep the minimum and let
+  // the line wrap anywhere rather than print something nobody can read.
+  return '<span class="' + cls + '" style="font-size:' + size2 + 'pt;white-space:normal;overflow-wrap:anywhere;line-height:1.05">' + two + '</span>';
+}
+
 function erDocSeatGrid(st, model) {
   var r = st.room, rows = Number(r.rows), per = Number(r.seatsPerRow);
   var grid = {};
@@ -63,8 +90,7 @@ function erDocSeatGrid(st, model) {
     t += '<tr><th class="rowhead">Seat ' + seat + '</th>';
     for (var row2 = 1; row2 <= rows; row2++) {
       var s = grid[row2 + '_' + seat];
-      t += '<td>' + (s ? '<span class="f"' + fitStyle(s.first, 6, avail, false, false, ER_FONT) + '>' + erEsc(s.first) + '</span>' +
-        '<span class="l"' + fitStyle(s.last, 6.8, avail, true, true, ER_FONT) + '>' + erEsc(s.last) + '</span>' : '') + '</td>';
+      t += '<td>' + (s ? erGridName(s.first, 'f', 6, avail, false, false) + erGridName(s.last, 'l', 6.8, avail, true, true) : '') + '</td>';
     }
     t += '</tr>';
   }
@@ -113,22 +139,33 @@ function erDocExempt(st, model) {
   return erDoc('Exempt list', erHeader(st, 'Exempt Students') + t, true);
 }
 
+/* Where a student sits, for the roll: "BSSC Gym R3 S7", "SEA Room", or "Exempt". */
+function erWhere(st, model, id) {
+  if (model.exempt[id]) return 'Exempt';
+  var p = model.seats[id];
+  if (p) return (st.room.name || 'Exam room') + ' R' + p.row + ' S' + p.seat;
+  if (model.provision[id] !== undefined) return 'SEA Room';
+  return 'Not seated';
+}
+
 function erRollPage(st, model, code) {
   var cls = model.classes[code] || {};
   var sessions = (st.details.sessions || []).filter(function (x) { return x.label; });
   if (!sessions.length) sessions = [{ label: 'Exam' }];
   var list = (cls.studentIds || []).map(function (id) { return model.students[id]; }).filter(Boolean).sort(erCompareNames);
   var t = '<div class="page"><div class="teacher">' + erEsc(cls.teacher || '') + '</div>' + erHeader(st, 'Exam Roll ' + code) +
-    '<table class="list roll"><thead><tr><th style="width:9mm">#</th><th>First name</th><th>Last name</th>' +
+    '<table class="list roll"><thead><tr><th style="width:9mm">#</th><th>First name</th><th>Last name</th><th style="width:34mm">Room / Seat</th>' +
     sessions.map(function (x) { return '<th style="width:26mm;text-align:center">' + erEsc(erShortSession(x.label)) + '</th>'; }).join('') +
     '</tr></thead><tbody>';
   list.forEach(function (s, i) {
     var ex = model.exempt[s.id];
+    var where = erWhere(st, model, s.id);
     t += '<tr' + (ex ? ' class="exempt"' : '') + '><td>' + (i + 1) + '</td>' + erNameCells(s) +
+      '<td class="where' + (where === 'SEA Room' ? ' sea' : '') + '">' + erEsc(ex ? '' : where) + '</td>' +
       (ex ? '<td class="exemptbox" colspan="' + sessions.length + '">' + erEsc('<Exempt>') + '</td>'
           : sessions.map(function () { return '<td class="box">&#9744;</td>'; }).join('')) + '</tr>';
   });
-  if (!list.length) t += '<tr><td colspan="' + (3 + sessions.length) + '">No students found in this class.</td></tr>';
+  if (!list.length) t += '<tr><td colspan="' + (4 + sessions.length) + '">No students found in this class.</td></tr>';
   t += '</tbody></table><div class="sig">' + sessions.map(function (x) {
     return '<div>Supervisor signature — ' + erEsc(erShortSession(x.label)) + '</div>';
   }).join('') + '</div></div>';
