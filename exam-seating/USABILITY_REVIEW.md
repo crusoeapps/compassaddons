@@ -2,6 +2,8 @@
 
 *27 November 2026. Reviewed against `master` at 29234f7, using only the fictional `test-data/` and the fake Compass from `exam-rooms.test.py` (extended with the four fictional 10ENG classes). Every task was done in Chromium at 1366×768 by clicking, typing and dragging, the way a coordinator would. Screenshots were kept out of the repo.*
 
+> **Update 2 (27 Nov 2026):** T4 and T5 are fixed. The chart tools are in one compact toolbar, the help is folded under "How to move students", and the grid has its own scroll area with headings that stay in view: at 1366×768 it starts near the top and shows about 12 seat rows (4 before). The chart now works from the keyboard: Tab reaches it, arrow keys move between seats, Enter or Space picks and places, Ctrl+Enter and Shift+Enter build a group, Esc clears and Ctrl+Z undoes, and focus stays on your seat after each change. Every seat is read out as "Row r Seat s: name, group, fixed/picked". Every box, drop-down and tick box has a proper label, the panel is announced as a dialog, the current step is marked, and messages are read out. Covered by 19 new checks (198/198 pass).
+>
 > **Update (27 Nov 2026):** T1, T2 and T3 are fixed. Rolls show Room / Seat with SEA students marked "SEA Room". Grid names are never below 6 pt and long names go onto two lines. Unsaved changes are shown in the top bar and the browser asks before you leave. Also, **Duplicate exam** now asks whether to start with **fresh seating** (the default) or **keep this exam's seating**. Covered by 17 new checks (179/179 pass).
 
 ## Verdict

@@ -372,7 +372,7 @@ with sync_playwright() as pw:
     # ---- room size on the chart step, before saving and documents ----
     check("room size can be changed on the seating chart", pg.locator("#er-root [data-roomsize] [data-bind='room.rows']").count() == 1
           and pg.locator("#er-root [data-roomsize] [data-bind='room.use']").count() == 1)
-    def chart_rows(): return pg.evaluate("() => document.querySelectorAll('#er-root table.er-grid tr:first-child th').length - 1")
+    def chart_rows(): return pg.evaluate("() => document.querySelectorAll('#er-root table.er-grid thead th').length - 1")
     def chart_spares(): return pg.locator("#er-root table.er-grid td.spare").count()
     M2 = lambda: pg.evaluate("() => JSON.parse(JSON.stringify(window.__examRooms.model().seats))")
     rows0, spares0 = chart_rows(), chart_spares()
@@ -396,6 +396,61 @@ with sync_playwright() as pw:
     pg.fill("#er-root [data-roomsize] [data-bind='room.rows']", str(rows0)); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.rows']", "change")
     pg.fill("#er-root [data-roomsize] [data-bind='room.use']", "17"); pg.dispatch_event("#er-root [data-roomsize] [data-bind='room.use']", "change")
     check("room restored for the rest of the run", chart_rows() == rows0 and chart_spares() == spares0)
+
+    # ---- T4: the chart fits a laptop screen ----
+    pg.set_viewport_size({"width": 1366, "height": 768}); pg.wait_for_timeout(200)
+    lay = pg.evaluate("""() => { var body = document.querySelector('#er-root .er-body').getBoundingClientRect();
+      var wrap = document.querySelector('#er-root .er-gridwrap').getBoundingClientRect();
+      var bottom = Math.min(body.bottom, wrap.bottom, window.innerHeight);
+      var rows = Array.from(document.querySelectorAll('#er-root .er-grid tbody tr')).filter(function (tr) { return tr.getBoundingClientRect().bottom <= bottom + 1; }).length;
+      return { gridTop: Math.round(wrap.top), seatRowsVisible: rows, toolbarHeight: Math.round(document.querySelector('#er-root .er-tools').getBoundingClientRect().height) }; }""")
+    check("at 1366x768 the grid starts near the top of the panel", lay["gridTop"] < 330, lay)
+    check("at 1366x768 at least 10 seat rows are visible without scrolling the page", lay["seatRowsVisible"] >= 10, lay)
+    check("chart tools sit in one compact toolbar", lay["toolbarHeight"] <= 90, lay)
+    check("help is folded away until opened", pg.evaluate("() => !document.querySelector('#er-root details.er-help').open") and "Keyboard:" in pg.locator("#er-root details.er-help").text_content())
+    pg.set_viewport_size({"width": 1280, "height": 720})
+
+    # ---- T5: keyboard and screen readers ----
+    check("the panel is announced as a dialog", pg.evaluate("() => { var c = document.querySelector('#er-root .er-card'); return c.getAttribute('role') === 'dialog' && c.getAttribute('aria-modal') === 'true' && !!document.getElementById(c.getAttribute('aria-labelledby')); }"))
+    check("the current step is marked for screen readers", pg.locator("#er-root .er-steps [aria-current='step']").count() == 1)
+    check("messages are announced (live region)", pg.locator("#er-root [role='status'][aria-live='polite']").count() == 1)
+    unl = []
+    for i in range(8):
+        pg.click("#er-root [data-act='go'][data-i='%d']" % i)
+        unl.append(pg.evaluate("() => Array.from(document.querySelectorAll('#er-root input, #er-root select, #er-root textarea')).filter(function (el) { var lab = (el.labels && el.labels.length) ? el.labels[0].textContent.trim() : ''; return !lab && !(el.getAttribute('aria-label') || '').trim(); }).length"))
+    check("no unlabelled boxes on any step", sum(unl) == 0, unl)
+    pg.click("#er-root [data-act='go'][data-i='6']")
+    check("exactly one seat is in the Tab order (roving focus)", pg.locator("#er-root .er-grid td[tabindex='0']").count() == 1)
+    pg.focus("#er-root [data-roomsize] [data-bind='room.use']")
+    reached = False
+    for _ in range(4):
+        pg.keyboard.press("Tab")
+        if pg.evaluate("() => !!(document.activeElement && document.activeElement.matches('.er-grid td'))"): reached = True; break
+    check("Tab reaches the seating chart", reached)
+    AE = lambda: pg.evaluate("() => { var a = document.activeElement; return a && a.matches('.er-grid td') ? [Number(a.dataset.row), Number(a.dataset.seat), a.getAttribute('aria-label')] : null; }")
+    pg.focus("#er-root .er-grid td[data-row='1'][data-seat='1']")
+    pg.keyboard.press("ArrowRight"); pg.keyboard.press("ArrowDown")
+    at_ = AE()
+    check("arrow keys move between seats (Right = next row, Down = next seat)", at_ and at_[:2] == [2, 2], at_)
+    check("each seat is read out with its row, seat and student", at_ and at_[2].startswith("Row 2 Seat 2: ") and len(at_[2]) > len("Row 2 Seat 2: empty"), at_)
+    occupant = M2_ = pg.evaluate("() => { var m = window.__examRooms.model(); return Object.keys(m.seats).filter(function (k) { return m.seats[k].row === 2 && m.seats[k].seat === 2; })[0]; }")
+    pg.keyboard.press("Enter")
+    check("Enter picks the student, and focus stays on that seat", pg.evaluate("() => window.__examRooms.ER.selection.slice()") == [occupant] and (AE() or [0, 0])[:2] == [2, 2])
+    for _ in range(16): pg.keyboard.press("ArrowDown")
+    target = AE()
+    pg.keyboard.press("Enter")
+    after_kb = pg.evaluate("() => JSON.parse(JSON.stringify(window.__examRooms.model().seats))")
+    check("Enter on another seat moves the picked student there", after_kb[occupant] == {"row": target[0], "seat": target[1]}, (target, after_kb[occupant]))
+    check("...and keyboard focus follows to the destination seat", (AE() or [0, 0])[:2] == target[:2])
+    pg.keyboard.press("Control+z")
+    check("Ctrl+Z on the chart undoes the keyboard move", pg.evaluate("() => JSON.parse(JSON.stringify(window.__examRooms.model().seats))")[occupant] == {"row": 2, "seat": 2})
+    pg.focus("#er-root .er-grid td[data-row='3'][data-seat='1']")
+    pg.keyboard.press("Control+Enter"); pg.keyboard.press("ArrowDown"); pg.keyboard.press("Control+Enter")
+    check("Ctrl+Enter adds students to the group one at a time", len(pg.evaluate("() => window.__examRooms.ER.selection")) == 2)
+    pg.keyboard.press("ArrowDown"); pg.keyboard.press("Shift+Enter")
+    check("Shift+Enter picks a block", len(pg.evaluate("() => window.__examRooms.ER.selection")) == 3)
+    pg.keyboard.press("Escape")
+    check("Esc clears the group from the keyboard", len(pg.evaluate("() => window.__examRooms.ER.selection")) == 0)
 
     # ---- documents ----
     docs = {d["key"]: d for d in pg.evaluate("() => window.__examRooms.docs()")}
