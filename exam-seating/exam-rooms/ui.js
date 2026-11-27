@@ -29,6 +29,9 @@ var ER = {
   roomSnap: null,       // chart state when a room-size box gained focus
   savedSnap: null,      // ER.S as last saved or opened (to spot unsaved changes)
   dupAsk: false,        // showing the Duplicate exam choice
+  focus: null,          // seat with keyboard focus on the chart: { row, seat }
+  gridFocus: false,     // whether keyboard focus is in the chart
+  helpOpen: false,      // "How to move students" expanded
   notice: '',           // message shown at the top of the current step
   root: null
 };
@@ -494,7 +497,17 @@ var ER_CSS =
   '#er-root .er-ok{color:#166534;font-weight:600}' +
   '#er-root .er-muted{color:#6b7280;font-size:12px}' +
   '#er-root .er-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}' +
-  '#er-root .er-grid{border-collapse:collapse;font-size:10px;margin-top:8px}' +
+  '#er-root .er-tools{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 0;position:sticky;top:-16px;background:#fff;z-index:3}' +
+  '#er-root .er-tools .er-btn{margin:0}' +
+  '#er-root .er-sep{flex:0 0 1px;height:24px;background:#e5e7eb;margin:0 4px}' +
+  '#er-root label.er-inl{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;margin:0}' +
+  '#er-root .er-help{margin:4px 0 6px;font-size:13px}#er-root .er-help summary{cursor:pointer;color:#0d5c2e;font-weight:600}' +
+  '#er-root .er-help p{margin:4px 0}' +
+  '#er-root .er-gridwrap{overflow:auto;max-height:max(320px, calc(94vh - 290px));border:1px solid #e5e7eb;border-radius:6px}' +
+  '#er-root .er-grid{border-collapse:separate;border-spacing:0;font-size:10px}' +
+  '#er-root .er-grid thead th{position:sticky;top:0;z-index:2}' +
+  '#er-root .er-grid tbody th{position:sticky;left:0;z-index:1}' +
+  '#er-root .er-grid td:focus{outline:3px solid #2563eb;outline-offset:-3px}' +
   '#er-root .er-grid th{background:#0d5c2e;color:#fff;padding:2px 3px;font-weight:600}' +
   '#er-root .er-grid td{border:1px solid #d1d5db;width:62px;height:30px;padding:1px 2px;text-align:center;vertical-align:middle;cursor:pointer;user-select:none}' +
   '#er-root .er-grid td.spare{background:#f3f4f6}' +
@@ -582,9 +595,9 @@ function erMatchRow(item, model) {
       '<option value="none"' + (choice === 'none' ? ' selected' : '') + '>Not found – leave this name out</option>' +
       '<option value="other"' + (choice && choice !== 'none' && !m.candidates.some(function (c) { return c.student.id === choice; }) ? ' selected' : '') + '>Someone else…</option>';
     status = (r.done ? '<span class="er-ok">Confirmed</span> ' : '<span class="er-bad">' + (m.status === 'none' ? 'Not found – please choose' : 'Please confirm') + '</span> ') +
-      '<select data-match="' + erEsc(r.key) + '">' + opts + '</select>';
+      '<select data-match="' + erEsc(r.key) + '" aria-label="' + erEsc('Student for ' + e.first + ' ' + e.last + ' (' + item.kind + ')') + '">' + opts + '</select>';
     if (choice && choice !== 'none' && !m.candidates.some(function (c) { return c.student.id === choice; }) || ER.otherFor === r.key) {
-      status += ' <select data-match="' + erEsc(r.key) + '">' + erStudentOptions(choice, 'Choose the right student…') + '</select>';
+      status += ' <select data-match="' + erEsc(r.key) + '" aria-label="' + erEsc('Choose any student for ' + e.first + ' ' + e.last) + '">' + erStudentOptions(choice, 'Choose the right student…') + '</select>';
     }
   }
   return '<tr><td>' + erEsc(item.kind) + '</td><td>' + erEsc(e.first + ' ' + e.last) + '</td><td>' + status + '</td></tr>';
@@ -599,21 +612,22 @@ function erMatchTable(model, kind) {
 function erStepExemptions(model) {
   return '<p>Paste the exempt students: first name and last name, one per line (copied from a spreadsheet is fine). ' +
     'They are left out of the seating but still listed on the roll as &lt;Exempt&gt;.</p>' +
-    '<textarea data-bind="exemptText" placeholder="Rose&#9;Marlowe">' + erEsc(ER.S.exemptText) + '</textarea>' +
+    '<textarea data-bind="exemptText" aria-label="Exempt students: first name and last name, one per line" placeholder="Rose&#9;Marlowe">' + erEsc(ER.S.exemptText) + '</textarea>' +
     (Object.keys(ER.data.students).length ? erMatchTable(model, 'Exemption') : '<p class="er-muted">Get students from Compass (step 2) to check these names.</p>');
 }
 
 function erStepSEA(model) {
   var h = '<p>Paste the SEA table with columns <b>First name, Last name, Form, Reason, Provision</b>. ' +
     'Reasons are used only to read the table: they are never shown, printed or saved.</p>' +
-    '<textarea data-sea="1" placeholder="First name&#9;Last name&#9;Form&#9;Reason&#9;Provision">' + erEsc(ER.seaText) + '</textarea>';
+    '<textarea data-sea="1" aria-label="SEA students: First name, Last name, Form, Reason, Provision" placeholder="First name&#9;Last name&#9;Form&#9;Reason&#9;Provision">' + erEsc(ER.seaText) + '</textarea>';
   if (!Object.keys(ER.data.students).length) return h + '<p class="er-muted">Get students from Compass (step 2) to check these names.</p>';
   h += erMatchTable(model, 'SEA');
   var sea = model.sea.slice().sort(erCompareNames);
   if (sea.length) {
     h += '<h3>Where they sit</h3><table class="er-t"><tr><th>Student</th><th>Provision</th><th>Stays in the main room?</th></tr>';
     sea.forEach(function (st) {
-      h += '<tr><td>' + erEsc(st.first + ' ' + st.last) + '</td><td>' + erEsc(model.provision[st.id]) + '</td><td><input type="checkbox" data-stay="' + erEsc(st.id) + '"' + (ER.S.seaStay[st.id] ? ' checked' : '') + '> Stays in ' + erEsc(ER.S.room.name || 'the main room') + '</td></tr>';
+      h += '<tr><td>' + erEsc(st.first + ' ' + st.last) + '</td><td>' + erEsc(model.provision[st.id]) + '</td><td><label><input type="checkbox" data-stay="' + erEsc(st.id) + '"' + (ER.S.seaStay[st.id] ? ' checked' : '') +
+        ' aria-label="' + erEsc(st.first + ' ' + st.last + ' stays in ' + (ER.S.room.name || 'the main room')) + '"> Stays in ' + erEsc(ER.S.room.name || 'the main room') + '</label></td></tr>';
     });
     h += '</table>';
   }
@@ -672,47 +686,58 @@ function erStepChart(model) {
   model.both.forEach(function (st) {
     h += '<div class="er-warn"><b>' + erEsc(st.first + ' ' + st.last) + '</b> is on both the exempt list and the SEA list. Remove them from one of the lists.</div>';
   });
-  var lastUndo = ER.undo[ER.undo.length - 1];
-  h += '<p><button class="er-btn" data-act="undo"' + (lastUndo ? ' title="Undo ' + erEsc(lastUndo.label) + ' (Ctrl+Z)"' : ' disabled') + '>&#8630; Undo' +
-    (lastUndo ? ' ' + erEsc(lastUndo.label) : '') + '</button> <span class="er-muted">' +
-    (ER.undo.length ? ER.undo.length + ' change' + (ER.undo.length === 1 ? '' : 's') + ' can be undone (Ctrl+Z / Cmd+Z)' : 'Nothing to undo yet') + '</span></p>' +
-    '<p><button class="er-btn" data-act="copySeating" title="Use the seats from an exam you saved with Save session file">Copy seating from a saved exam&hellip;</button> ' +
-    '<span class="er-muted">Seating starts fresh for each exam. This puts every student who sat that exam back in the same seat.</span></p>' +
-    (Object.keys(S.pins).length ? '<p><button class="er-btn" data-act="clearPins">Clear all fixed seats (' + Object.keys(S.pins).length + ')</button> ' +
-      '<span class="er-muted">Fixed seats have a green outline. Clearing puts everyone back in normal seating; Undo puts them back.</span></p>' : '');
-  h += '<div class="er-row" data-roomsize="1">' +
-    '<div><label>Rows</label>' + erIn('room.rows', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
-    '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
-    '<div><label>Seats to use in each row</label>' + erIn('room.use', ' type="number" min="1" max="60" style="width:70px"') + '</div></div>' +
-    '<p class="er-muted">Change the room size here and the chart redraws straight away. Saving and the documents always use the chart exactly as it is shown.</p>';
+  var lastUndo = ER.undo[ER.undo.length - 1], nPins = Object.keys(S.pins).length;
+  // One compact toolbar, so the grid starts near the top even on a laptop.
+  h += '<div class="er-tools" data-roomsize="1">' +
+    '<button class="er-btn" data-act="undo"' + (lastUndo ? ' title="Undo ' + erEsc(lastUndo.label) + ' (Ctrl+Z)"' : ' disabled title="Nothing to undo yet"') + '>&#8630; Undo' +
+      (lastUndo ? ' ' + erEsc(lastUndo.label) : '') + '</button>' +
+    '<button class="er-btn" data-act="copySeating" title="Seating starts fresh for each exam. This puts every student who sat a saved exam back in the same seat.">Copy seating from a saved exam&hellip;</button>' +
+    (nPins ? '<button class="er-btn" data-act="clearPins" title="Fixed seats have a green outline. Clearing puts everyone back in normal seating; Undo puts them back.">Clear all fixed seats (' + nPins + ')</button>' : '') +
+    '<span class="er-sep"></span>' +
+    '<label class="er-inl">Rows ' + erIn('room.rows', ' type="number" min="1" max="60" style="width:58px" aria-label="Rows"') + '</label>' +
+    '<label class="er-inl">Seats per row ' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:58px" aria-label="Seats per row"') + '</label>' +
+    '<label class="er-inl">Seats to use ' + erIn('room.use', ' type="number" min="1" max="60" style="width:58px" aria-label="Seats to use in each row"') + '</label>' +
+    '</div>';
   if (ER.selection.length) {
-    h += '<div class="er-warn" data-selbar="1"><b>' + ER.selection.length + ' picked.</b> Click a seat to move ' + (ER.selection.length === 1 ? 'them' : 'them there together (the group keeps its shape)') +
+    h += '<div class="er-warn" data-selbar="1"><b>' + ER.selection.length + ' picked.</b> Click a seat (or press Enter on one) to move ' + (ER.selection.length === 1 ? 'them' : 'them there together (the group keeps its shape)') +
       ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button>' +
       (function () { var k = ER.selection.filter(function (x) { return S.pins[x]; }).length;
         return k ? ' <button class="er-btn" data-act="unpinSel">Unfix picked (' + k + ')</button>' : ''; })() + '</div>';
   }
-  h += '<p><b>Pick several students:</b> Ctrl-click (Cmd-click on a Mac) to add or remove one, or Shift-click to pick everyone in a block. ' +
-    'Then click a seat, or drag one of them, to move them all together. Anyone in the way swaps into the seats they left.</p>';
-  h += '<p>Drag a student onto another seat to swap them (or onto an empty seat to move them). Or click one seat, then another. ' +
-    'Moved students become fixed seats, so they stay put if you change anything else. Green outline = fixed.</p>';
+  h += '<details class="er-help"' + (ER.helpOpen ? ' open' : '') + '><summary>How to move students (mouse and keyboard)</summary>' +
+    '<p><b>Move one:</b> drag a student onto another seat to swap them (or onto an empty seat to move them), or click one seat, then another.</p>' +
+    '<p><b>Move several:</b> Ctrl-click (Cmd-click on a Mac) to add or remove a student, or Shift-click to pick a whole block, then click a seat or drag one of them. ' +
+    'The group keeps its shape; anyone in the way swaps into the seats they left.</p>' +
+    '<p><b>Keyboard:</b> Tab to the chart, then use the arrow keys to move between seats. Enter or Space picks a student, then places them on the seat you press Enter on. ' +
+    'Ctrl+Enter adds or removes a student from the group, Shift+Enter picks a block, Esc clears, Ctrl+Z undoes.</p>' +
+    '<p>Moved students become fixed seats (green outline), so they stay put if you change anything else. Grey seats are spares. ' +
+    'Saving and the documents always use the chart exactly as it is shown.</p></details>';
   var grid = {};
   Object.keys(model.seats).forEach(function (id) { var p = model.seats[id]; grid[p.row + '_' + p.seat] = model.students[id]; });
-  h += '<div style="overflow:auto"><table class="er-grid"><tr><th></th>';
-  for (var row = 1; row <= rows; row++) h += '<th>Row ' + row + '</th>';
-  h += '</tr>';
+  // Keyboard focus: one seat is in the Tab order at a time (roving tabindex).
+  var f = ER.focus && ER.focus.row <= rows && ER.focus.seat <= per ? ER.focus : { row: 1, seat: 1 };
+  h += '<div class="er-gridwrap"><table class="er-grid" role="grid" aria-label="' + erEsc('Seating chart for ' + (r.name || 'the exam room') + ': rows across, seats down') + '"><thead><tr><th></th>';
+  for (var row = 1; row <= rows; row++) h += '<th scope="col">Row ' + row + '</th>';
+  h += '</tr></thead><tbody>';
   for (var seat = 1; seat <= per; seat++) {
-    h += '<tr><th>Seat ' + seat + '</th>';
+    h += '<tr><th scope="row">Seat ' + seat + '</th>';
     for (var row2 = 1; row2 <= rows; row2++) {
       var st = grid[row2 + '_' + seat], cls = [];
+      var fixed = st && S.pins[st.id], picked = st && ER.selection.indexOf(st.id) >= 0;
       if (seat > use) cls.push('spare');
-      if (st && S.pins[st.id]) cls.push('pin');
-      if (st && ER.selection.indexOf(st.id) >= 0) cls.push('sel');
-      h += '<td class="' + cls.join(' ') + '" data-row="' + row2 + '" data-seat="' + seat + '"' +
+      if (fixed) cls.push('pin');
+      if (picked) cls.push('sel');
+      var label = 'Row ' + row2 + ' Seat ' + seat + ': ' + (st ? st.first + ' ' + st.last + (model.groupOf[st.id] ? ', ' + model.groupOf[st.id] : '') +
+        (fixed ? ', fixed seat' : '') + (picked ? ', picked' : '') : 'empty' + (seat > use ? ' spare seat' : ''));
+      h += '<td role="gridcell" tabindex="' + (row2 === f.row && seat === f.seat ? '0' : '-1') + '" aria-label="' + erEsc(label) + '"' +
+        (st ? ' aria-selected="' + (picked ? 'true' : 'false') + '"' : '') +
+        ' class="' + cls.join(' ') + '" data-row="' + row2 + '" data-seat="' + seat + '"' +
         (st ? ' draggable="true" data-id="' + erEsc(st.id) + '" title="' + erEsc(st.first + ' ' + st.last + ' – ' + (model.groupOf[st.id] || '')) + '"><span>' + erEsc(st.first) + '</span><b>' + erEsc(st.last) + '</b>' : '>') + '</td>';
     }
     h += '</tr>';
   }
-  h += '</table></div><p class="er-muted">Grey seats are spares (beyond "seats to use").</p>';
+  h += '</tbody>';
+  h += '</table></div>';
   h += '<h3>Groups</h3><ul>' + model.ranges.map(function (x) { return '<li>' + erEsc(x) + '</li>'; }).join('') + '</ul>';
   h += '<p>' + model.sitting.length + ' sitting the exam: ' + Object.keys(model.seats).length + ' in ' + erEsc(r.name || 'the main room') + ', ' +
     model.sea.filter(function (s) { return !model.seats[s.id]; }).length + ' in the SEA Room. ' + Object.keys(model.exempt).length + ' exempt.</p>';
@@ -758,16 +783,30 @@ function erRenderNow() {
       '<br><button class="er-btn pri" data-act="dupFresh">Fresh seating (recommended)</button> ' +
       '<button class="er-btn" data-act="dupKeep">Keep this exam\'s seating</button> ' +
       '<button class="er-btn" data-act="dupCancel">Cancel</button></div>' : '';
-  root.innerHTML = '<div class="er-card"><div class="er-head"><strong>Exam Rooms</strong>' +
+  var hadGridFocus = ER.gridFocus && ER.step === 6;
+  root.innerHTML = '<div class="er-card" role="dialog" aria-modal="true" aria-labelledby="er-title"><div class="er-head"><strong id="er-title">Exam Rooms</strong>' +
     (dirty ? '<span class="er-unsaved" data-unsaved="1">Unsaved changes</span>' : '') +
     '<button class="er-btn" data-act="open">Open saved file</button><button class="er-btn' + (dirty ? ' pri' : '') + '" data-act="save">Save session file</button>' +
     '<button class="er-btn" data-act="duplicate" title="Start the next exam from a copy of this one">Duplicate exam</button>' +
     '<button class="er-btn" data-act="close" aria-label="Close">Close</button></div>' +
-    '<div class="er-steps">' + ER_STEPS.map(function (s, i) { return '<button data-act="go" data-i="' + i + '" class="' + (i === ER.step ? 'on' : '') + '">' + (i + 1) + '. ' + erEsc(s) + '</button>'; }).join('') + '</div>' +
-    '<div class="er-body">' + dup + (ER.notice ? '<div class="er-note">' + erEsc(ER.notice) + '</div>' : '') + '<h2 style="margin:0 0 6px;font-size:18px">' + erEsc(ER_STEPS[ER.step]) + '</h2>' + body + '</div>' +
+    '<nav class="er-steps" aria-label="Steps">' + ER_STEPS.map(function (s, i) { return '<button data-act="go" data-i="' + i + '" class="' + (i === ER.step ? 'on' : '') + '"' + (i === ER.step ? ' aria-current="step"' : '') + '>' + (i + 1) + '. ' + erEsc(s) + '</button>'; }).join('') + '</nav>' +
+    '<div class="er-body">' + dup + '<div role="status" aria-live="polite">' + (ER.notice ? '<div class="er-note">' + erEsc(ER.notice) + '</div>' : '') + '</div>' + '<h2 style="margin:0 0 6px;font-size:18px">' + erEsc(ER_STEPS[ER.step]) + '</h2>' + body + '</div>' +
     '<div class="er-foot"><button class="er-btn" data-act="back"' + (ER.step === 0 ? ' disabled' : '') + '>Back</button>' +
     '<button class="er-btn pri" data-act="next"' + (ER.step === ER_STEPS.length - 1 ? ' disabled' : '') + '>Next</button></div></div>';
   root.querySelector('.er-body').scrollTop = keepScroll;
+  // Every box gets a proper label: link "<label>Text</label><input>" pairs that sit side by side.
+  var n = 0;
+  root.querySelectorAll('label + input, label + select, label + textarea').forEach(function (el) {
+    var lab = el.previousElementSibling;
+    if (!el.id) el.id = 'er-f' + (++n);
+    if (!lab.htmlFor) lab.htmlFor = el.id;
+  });
+  root.querySelectorAll('input:not([aria-label]):not([id]), select:not([aria-label]):not([id]), textarea:not([aria-label]):not([id])').forEach(function (el) {
+    var ph = el.getAttribute('placeholder') || el.getAttribute('data-bind') || '';
+    if (!(el.labels && el.labels.length)) el.setAttribute('aria-label', ph);
+  });
+  // Keep keyboard users on the seat they were working on after a redraw.
+  if (hadGridFocus && ER.focus) erFocusSeat(ER.focus.row, ER.focus.seat);
 }
 
 function erSet(path, value) {
@@ -947,15 +986,21 @@ function erHandle(e) {
   // everyone in the rectangle from the last pick. A plain click on a seat moves
   // what is picked there (one student, or the whole group keeping its shape).
   var cell = e.target.closest('.er-grid td[data-row]');
-  if (cell) {
-    var id = cell.getAttribute('data-id'), row = Number(cell.getAttribute('data-row')), seat = Number(cell.getAttribute('data-seat'));
+  if (cell) erSeatAction(cell, e.ctrlKey || e.metaKey, e.shiftKey);
+}
+
+/* One seat action, the same for a click and for Enter/Space on a focused seat. */
+function erSeatAction(cell, toggle, range) {
+  ER.focus = { row: Number(cell.getAttribute('data-row')), seat: Number(cell.getAttribute('data-seat')) };
+  {
+    var id = cell.getAttribute('data-id'), row = ER.focus.row, seat = ER.focus.seat;
     var sel = ER.selection;
-    if ((e.ctrlKey || e.metaKey) && id) {
+    if (toggle && id) {
       var k = sel.indexOf(id);
       if (k >= 0) sel.splice(k, 1); else { sel.push(id); ER.anchor = id; }
       erRender(); return;
     }
-    if (e.shiftKey && id) {
+    if (range && id) {
       erRangeIds(ER.anchor || id, id).forEach(function (x) { if (sel.indexOf(x) < 0) sel.push(x); });
       ER.anchor = ER.anchor || id;
       erRender(); return;
@@ -964,6 +1009,17 @@ function erHandle(e) {
     if (id && sel.indexOf(id) >= 0) { ER.selection = []; ER.anchor = null; erRender(); return; }   // click a picked student: un-pick
     erMoveBlock(sel.slice(), sel[0], row, seat);
   }
+}
+
+/* Move keyboard focus to a seat (roving tabindex), scrolling it into view. */
+function erFocusSeat(r, s) {
+  var root = ER.root, next = root && root.querySelector('.er-grid td[data-row="' + r + '"][data-seat="' + s + '"]');
+  if (!next) return;
+  root.querySelectorAll('.er-grid td[tabindex="0"]').forEach(function (x) { x.setAttribute('tabindex', '-1'); });
+  next.setAttribute('tabindex', '0');
+  ER.focus = { row: r, seat: s };
+  next.focus();
+  if (next.scrollIntoView) next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function erInput(e) {
@@ -1013,6 +1069,32 @@ function erStart() {
   window.addEventListener('beforeunload', function (e) {
     if (ER.root && erDirty()) { e.preventDefault(); e.returnValue = ''; return ''; }
   });
+  root.addEventListener('keydown', function (e) {
+    var td = e.target.closest && e.target.closest('.er-grid td[data-row]');
+    if (!td) return;
+    var r0 = Number(td.getAttribute('data-row')), s0 = Number(td.getAttribute('data-seat'));
+    var rows = Number(ER.S.room.rows), per = Number(ER.S.room.seatsPerRow), r = r0, s = s0;
+    // Rows run across the chart and seats run down it, so Left/Right change row and Up/Down change seat.
+    if (e.key === 'ArrowRight') r = Math.min(rows, r0 + 1);
+    else if (e.key === 'ArrowLeft') r = Math.max(1, r0 - 1);
+    else if (e.key === 'ArrowDown') s = Math.min(per, s0 + 1);
+    else if (e.key === 'ArrowUp') s = Math.max(1, s0 - 1);
+    else if (e.key === 'Home') { r = 1; if (e.ctrlKey) s = 1; }
+    else if (e.key === 'End') { r = rows; if (e.ctrlKey) s = per; }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); ER.gridFocus = true;
+      erSeatAction(td, e.ctrlKey || e.metaKey, e.shiftKey);
+      return;
+    } else return;
+    e.preventDefault();
+    erFocusSeat(r, s);
+  });
+  root.addEventListener('focusin', function (e) {
+    var td = e.target.closest && e.target.closest('.er-grid td[data-row]');
+    ER.gridFocus = !!td;
+    if (td) ER.focus = { row: Number(td.getAttribute('data-row')), seat: Number(td.getAttribute('data-seat')) };
+  });
+  root.addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('er-help')) ER.helpOpen = e.target.open; }, true);
   document.addEventListener('keydown', function (e) {
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing &&
