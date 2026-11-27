@@ -587,6 +587,34 @@ with sync_playwright() as pw:
     pg.wait_for_function("() => /not a saved exam/.test(document.querySelector('#er-root .er-note').textContent)", timeout=10000)
     check("a file that isn't a saved exam changes nothing", S()["pins"] == pins_before)
 
+    # ---- clearing fixed seats ----
+    pins0 = S()["pins"]; n0 = len(pins0)
+    check("chart offers Clear all fixed seats with the count", ("Clear all fixed seats (%d)" % n0) in pg.inner_text("#er-root .er-body"), n0)
+    two = [i for i in list(pins0)[:2]]
+    for i in two:
+        p_ = M2()[i]; pg.click(cell(p_["row"], p_["seat"]), modifiers=["Control"])
+    check("picking fixed students offers Unfix picked", "Unfix picked (2)" in pg.inner_text("#er-root [data-selbar]"))
+    pg.click("#er-root [data-act='unpinSel']")
+    check("Unfix picked removes just those fixed seats", all(i not in S()["pins"] for i in two) and len(S()["pins"]) == n0 - 2)
+    pg.click("#er-root [data-act='undo']")
+    check("...and Undo puts them back", S()["pins"] == pins0)
+    pg.locator("#er-root .er-body [data-act='clearPins']").click()
+    cleared = M2()
+    check("Clear all fixed seats empties them and reseats everyone normally", S()["pins"] == {} and len({(q["row"], q["seat"]) for q in cleared.values()}) == len(cleared)
+          and "Cleared %d fixed seat" % n0 in pg.inner_text("#er-root .er-note"))
+    check("the chart no longer offers Clear all", pg.locator("#er-root .er-body [data-act='clearPins']").count() == 0)
+    pg.click("#er-root [data-act='undo']")
+    check("Undo restores every fixed seat", S()["pins"] == pins0)
+    pg.click("#er-root [data-act='go'][data-i='4']")
+    check("Fixed seats step offers Clear all with the count", ("Clear all %d fixed seats" % n0) in pg.inner_text("#er-root .er-body"))
+    pg.locator("#er-root [data-act='delPin']").first.click()
+    check("Remove on one fixed seat can be undone too", len(S()["pins"]) == n0 - 1 and
+          pg.evaluate("() => window.__examRooms.ER.undo[window.__examRooms.ER.undo.length - 1].label").startswith("removing the fixed seat for"))
+    pg.click("#er-root [data-act='clearPins']")
+    check("Clear all on the Fixed seats step works", S()["pins"] == {} and "No fixed seats" in pg.inner_text("#er-root .er-body"))
+    pg.click("#er-root [data-act='go'][data-i='6']"); pg.click("#er-root [data-act='undo']")
+    check("...and is undone from the chart", len(S()["pins"]) == n0 - 1)
+
     check("no JavaScript errors", errors == [], errors[:3])
     browser.close()
 

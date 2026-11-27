@@ -613,7 +613,8 @@ function erStepPins() {
       (p.back ? 'Back of their row' : 'Row ' + erEsc(p.row) + ' Seat ' + erEsc(p.seat)) + '</td><td><button class="er-btn" data-act="delPin" data-id="' + erEsc(id) + '">Remove</button></td></tr>';
   });
   if (!ids.length) h += '<tr><td colspan="3" class="er-muted">No fixed seats.</td></tr>';
-  h += '</table><div class="er-row"><div><label>Student</label><select id="er-pin-who">' + erStudentOptions('') + '</select></div>' +
+  h += '</table>' + (ids.length ? '<p><button class="er-btn" data-act="clearPins">Clear all ' + ids.length + ' fixed seat' + (ids.length === 1 ? '' : 's') + '</button> ' +
+    '<span class="er-muted">Everyone goes back to normal seating. Undo is on the Seating chart.</span></p>' : '') + '<div class="er-row"><div><label>Student</label><select id="er-pin-who">' + erStudentOptions('') + '</select></div>' +
     '<div><label>Where</label><select id="er-pin-kind"><option value="seat">A particular seat</option><option value="back">Back of their row</option></select></div>' +
     '<div><label>Row</label><input id="er-pin-row" type="number" min="1" style="width:70px"></div>' +
     '<div><label>Seat</label><input id="er-pin-seat" type="number" min="1" style="width:70px"></div>' +
@@ -659,7 +660,9 @@ function erStepChart(model) {
     (lastUndo ? ' ' + erEsc(lastUndo.label) : '') + '</button> <span class="er-muted">' +
     (ER.undo.length ? ER.undo.length + ' change' + (ER.undo.length === 1 ? '' : 's') + ' can be undone (Ctrl+Z / Cmd+Z)' : 'Nothing to undo yet') + '</span></p>' +
     '<p><button class="er-btn" data-act="copySeating" title="Use the seats from an exam you saved with Save session file">Copy seating from a saved exam&hellip;</button> ' +
-    '<span class="er-muted">Seating starts fresh for each exam. This puts every student who sat that exam back in the same seat.</span></p>';
+    '<span class="er-muted">Seating starts fresh for each exam. This puts every student who sat that exam back in the same seat.</span></p>' +
+    (Object.keys(S.pins).length ? '<p><button class="er-btn" data-act="clearPins">Clear all fixed seats (' + Object.keys(S.pins).length + ')</button> ' +
+      '<span class="er-muted">Fixed seats have a green outline. Clearing puts everyone back in normal seating; Undo puts them back.</span></p>' : '');
   h += '<div class="er-row" data-roomsize="1">' +
     '<div><label>Rows</label>' + erIn('room.rows', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
     '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
@@ -667,7 +670,9 @@ function erStepChart(model) {
     '<p class="er-muted">Change the room size here and the chart redraws straight away. Saving and the documents always use the chart exactly as it is shown.</p>';
   if (ER.selection.length) {
     h += '<div class="er-warn" data-selbar="1"><b>' + ER.selection.length + ' picked.</b> Click a seat to move ' + (ER.selection.length === 1 ? 'them' : 'them there together (the group keeps its shape)') +
-      ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button></div>';
+      ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button>' +
+      (function () { var k = ER.selection.filter(function (x) { return S.pins[x]; }).length;
+        return k ? ' <button class="er-btn" data-act="unpinSel">Unfix picked (' + k + ')</button>' : ''; })() + '</div>';
   }
   h += '<p><b>Pick several students:</b> Ctrl-click (Cmd-click on a Mac) to add or remove one, or Shift-click to pick everyone in a block. ' +
     'Then click a seat, or drag one of them, to move them all together. Anyone in the way swaps into the seats they left.</p>';
@@ -853,7 +858,28 @@ function erHandle(e) {
     else if (act === 'upGroup') { var g = S.groups.splice(i, 1)[0]; S.groups.splice(i - 1, 0, g); }
     else if (act === 'loadAll') { erLoadAll(); return; }
     else if (act === 'retry') { erLoadClass(t.getAttribute('data-code')); return; }
-    else if (act === 'delPin') delete S.pins[t.getAttribute('data-id')];
+    else if (act === 'delPin') {
+      var pid = t.getAttribute('data-id'), pst = ER.data.students[pid];
+      erRememberChart('removing the fixed seat for ' + (pst ? pst.first + ' ' + pst.compassLast : 'a student'));
+      delete S.pins[pid];
+    }
+    else if (act === 'clearPins') {
+      var n = Object.keys(S.pins).length;
+      if (n) {
+        erRememberChart('clearing ' + n + ' fixed seat' + (n === 1 ? '' : 's'));
+        S.pins = {}; ER.selection = []; ER.anchor = null;
+        ER.notice = 'Cleared ' + n + ' fixed seat' + (n === 1 ? '' : 's') + '. Everyone is back in normal seating. Undo on the Seating chart puts them back.';
+      }
+    }
+    else if (act === 'unpinSel') {
+      var un = ER.selection.filter(function (x) { return S.pins[x]; });
+      if (un.length) {
+        erRememberChart('unfixing ' + un.length + ' student' + (un.length === 1 ? '' : 's'));
+        un.forEach(function (x) { delete S.pins[x]; });
+        ER.notice = 'Unfixed ' + un.length + ' student' + (un.length === 1 ? '' : 's') + ': they are back in normal seating.';
+      }
+      ER.selection = []; ER.anchor = null;
+    }
     else if (act === 'addPin') {
       var who = ER.root.querySelector('#er-pin-who').value, kind = ER.root.querySelector('#er-pin-kind').value;
       var row = parseInt(ER.root.querySelector('#er-pin-row').value, 10), seat = parseInt(ER.root.querySelector('#er-pin-seat').value, 10);
