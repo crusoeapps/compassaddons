@@ -406,6 +406,19 @@ with sync_playwright() as pw:
     grid, master, sea, rolls = docs["grid"]["html"], docs["master"]["html"], docs["sea"]["html"], docs["rolls"]["html"]
     check("seat grid title", "Crusoe College — BSSC Gym Supervisor Sheet" in text(grid) and "Semester 2 Exam · Year 10" in text(grid).replace("&middot;", "·"))
     check("seat grid is A4 landscape", "size: A4 landscape" in grid)
+    gp = ctx.new_page(); gp.set_content(grid); gp.emulate_media(media="print")
+    gp.set_viewport_size({"width": int((297 - 12) / 25.4 * 96), "height": 1000}); gp.wait_for_timeout(200)
+    gchk = gp.evaluate("""() => { var spans = Array.from(document.querySelectorAll('td span'));
+      var sizes = spans.map(function (e) { return parseFloat(getComputedStyle(e).fontSize) * 0.75; });
+      var over = spans.filter(function (e) { return e.scrollWidth > e.clientWidth + 1; }).length;
+      var long = spans.filter(function (e) { return e.textContent.indexOf('QUILLFEATHER') >= 0; })[0];
+      return { minPt: Math.min.apply(null, sizes), over: over, longLines: long ? Math.round(long.getBoundingClientRect().height / (parseFloat(getComputedStyle(long).fontSize) * 1.05)) : 0,
+               heightMm: document.body.scrollHeight / 96 * 25.4 }; }""")
+    gp.close()
+    check("grid names are never smaller than 6 pt", gchk["minPt"] >= 5.99, gchk)
+    check("no grid name is cut off", gchk["over"] == 0, gchk)
+    check("a very long surname wraps onto two lines instead of shrinking", gchk["longLines"] >= 2, gchk)
+    check("the grid still fits on one A4 landscape page", gchk["heightMm"] <= 210 - 12, gchk)
     check("seat grid footer lists groups", "Advanced Maths – Row 1 Seat 1 to" in text(grid) and "students)" in text(grid))
     check("master list columns", headers(master) == ["First name", "Last name", "Room", "Row", "Seat"], headers(master))
     check("SEA list columns", headers(sea) == ["First name", "Last name", "Class", "Room", "Arrangements"], headers(sea))
@@ -416,7 +429,14 @@ with sync_playwright() as pw:
     check("exempt list has every exempt student, A-Z, and nobody else", ex_last == want_last, (ex_last, want_last))
     check("exempt list title", "Crusoe College — Exempt Students" in text(ex_doc) and "size: A4 portrait" in ex_doc)
     roll_heads = headers(rolls)
-    check("roll columns, one tick column per session", roll_heads == ["#", "First name", "Last name", "Mon 16 Nov AM", "Mon 16 Nov PM"], roll_heads)
+    check("roll columns: Room / Seat, then one tick column per session", roll_heads == ["#", "First name", "Last name", "Room / Seat", "Mon 16 Nov AM", "Mon 16 Nov PM"], roll_heads)
+    wheres = re.findall(r'<td class="where( sea)?">(.*?)</td>', rolls)
+    sea_ids = pg.evaluate("() => { var m = window.__examRooms.model(); return m.sea.map(function (x) { return x.id; }).filter(function (id) { return !m.seats[id]; }); }")
+    check("SEA students are marked SEA Room on the roll (bold)", len([w for w in wheres if w[1] == "SEA Room" and w[0]]) == sum(
+          len([c for c in CLASSES if int(i[1:]) in ENROL[c]]) for i in sea_ids) and sea_ids, (len(sea_ids), wheres.count((" sea", "SEA Room"))))
+    first_seated = sorted(model["seats"].items(), key=lambda kv: (kv[1]["row"], kv[1]["seat"]))[0]
+    check("seated students show their room, row and seat on the roll", ("BSSC Gym R%d S%d" % (first_seated[1]["row"], first_seated[1]["seat"])) in rolls)
+    check("exempt students show no seat on the roll, just <Exempt>", len([w for w in wheres if w[1] == ""]) == rolls.count("&lt;Exempt&gt;") > 0)
     check("one roll page per class code found", len(re.findall(r'class="page"', rolls)) == len(CLASSES), len(re.findall(r'class="page"', rolls)))
     check("roll title and teacher initials", "Crusoe College — Exam Roll 10MAA1" in text(rolls) and '<div class="teacher">TC</div>' in rolls)
     n_exempt = len(model["exempt"])
@@ -532,12 +552,24 @@ with sync_playwright() as pw:
     saved_path = os.path.join(tempfile.mkdtemp(), "earlier-exam.json"); json.dump(saved_plan, open(saved_path, "w"))
     main_id = [r["id"] for r in saved_plan["sessions"][0]["rooms"] if r["purpose"] == "main"][0]
     saved_seats = {st["id"]: {"row": st["row"], "seat": st["seat"]} for st in saved_plan["sessions"][0]["students"] if st["roomId"] == main_id and st["row"]}
-    before = S()
-    pg.once("dialog", lambda d: d.dismiss())
+    pg.evaluate("() => { window.__examRooms.ER.S.details.year = 'Year 10 '; }"); pg.click("#er-root [data-act='go'][data-i='6']")   # an unsaved change
+    before = S(); seats_before = M2()
     pg.click("#er-root [data-act='duplicate']")
-    check("duplicate asks first; Cancel changes nothing", S() == before)
-    pg.once("dialog", lambda d: d.accept())
-    pg.click("#er-root [data-act='duplicate']")
+    check("Duplicate asks first, inside the panel, with fresh seating as the default",
+          pg.locator("#er-root [data-dupask] [data-act='dupFresh']").count() == 1 and "Fresh seating (recommended)" in pg.inner_text("#er-root [data-dupask]"))
+    check("...and warns when this exam has unsaved changes", "unsaved changes" in pg.inner_text("#er-root [data-dupask]"))
+    pg.click("#er-root [data-act='dupCancel']")
+    check("Cancel changes nothing", S() == before and pg.locator("#er-root [data-dupask]").count() == 0)
+    pg.click("#er-root [data-act='duplicate']"); pg.click("#er-root [data-act='dupKeep']")
+    kept = S()
+    kept_seats = M2()
+    check("'Keep this exam's seating' keeps every student in the same seat", all(kept_seats.get(i) == p_ for i, p_ in seats_before.items())
+          and len(kept["pins"]) == len(seats_before) and "same seating" in pg.inner_text("#er-root .er-note"))
+    check("...and students no longer exempt or SEA are seated in free seats around them", len(kept_seats) > len(seats_before)
+          and len({(q["row"], q["seat"]) for q in kept_seats.values()}) == len(kept_seats))
+    ER_S = json.dumps(before)
+    pg.evaluate("(s) => { window.__examRooms.ER.S = JSON.parse(s); window.__examRooms.ER.step = 6; }", ER_S)
+    pg.click("#er-root [data-act='duplicate']"); pg.click("#er-root [data-act='dupFresh']")
     dup = S()
     check("duplicate copies the setup", dup["room"] == before["room"] and dup["groups"] == before["groups"] and
           dup["details"]["sessions"] == before["details"]["sessions"] and dup["overrides"] == before["overrides"])
@@ -614,6 +646,26 @@ with sync_playwright() as pw:
     check("Clear all on the Fixed seats step works", S()["pins"] == {} and "No fixed seats" in pg.inner_text("#er-root .er-body"))
     pg.click("#er-root [data-act='go'][data-i='6']"); pg.click("#er-root [data-act='undo']")
     check("...and is undone from the chart", len(S()["pins"]) == n0 - 1)
+
+    # ---- unsaved changes ----
+    check("a copied exam counts as unsaved", pg.locator("#er-root [data-unsaved]").count() == 1)
+    with pg.expect_download():
+        pg.click("#er-root [data-act='save']")
+    check("saving clears the Unsaved changes marker", pg.locator("#er-root [data-unsaved]").count() == 0)
+    pg.fill("[data-bind='details.exam']", "Changed name") if pg.locator("[data-bind='details.exam']").count() else None
+    pg.click("#er-root [data-act='go'][data-i='0']"); pg.fill("[data-bind='details.exam']", "Changed name"); pg.dispatch_event("[data-bind='details.exam']", "change")
+    check("any change shows Unsaved changes again", pg.locator("#er-root [data-unsaved]").count() == 1)
+    asked = []
+    pg.on("dialog", lambda d: (asked.append(d.type), d.dismiss()))
+    pump = ctx.new_page()
+    pg.close(run_before_unload=True); pump.wait_for_timeout(800)
+    check("closing the tab with unsaved changes asks first", "beforeunload" in asked and not pg.is_closed(), (asked, pg.is_closed()))
+    p3 = ctx.new_page(); p3.route("https://compass.test/**", fake.handle)
+    p3.goto("https://compass.test/Records/User.aspx"); p3.evaluate("window.Compass = { schoolId: 1 }"); load_tool(p3)
+    asked3 = []; p3.on("dialog", lambda d: (asked3.append(d.type), d.dismiss()))
+    check("a fresh, untouched panel has nothing unsaved", p3.locator("#er-root [data-unsaved]").count() == 0)
+    p3.close(run_before_unload=True); pump.wait_for_timeout(800)
+    check("...and closes without asking", asked3 == [], asked3)
 
     check("no JavaScript errors", errors == [], errors[:3])
     browser.close()

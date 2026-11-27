@@ -417,12 +417,15 @@ function erDocCSS() {
     .split('"DM Serif Display", Georgia, serif').join(ER_FONT) +
     'table.list td.last { font-weight: 700; text-transform: uppercase; }' +
     '.foot { margin-top: 4mm; font-size: 8pt; line-height: 1.5; }' +
+    'body { padding: 4mm 6mm; }' +
     '.page { page-break-after: always; break-after: page; }' +
     '.page:last-child { page-break-after: auto; break-after: auto; }' +
     '.teacher { float: right; font-size: 24pt; font-weight: 700; color: #1a2540; line-height: 1; }' +
     'table.roll td { text-align: left; font-size: 9pt; padding: 5px 6px; }' +
     'table.roll th { text-align: left; font-size: 8pt; padding: 4px 6px; }' +
     'table.roll td.box { text-align: center; }' +
+    'table.roll td.where { white-space: nowrap; font-size: 8.5pt; }' +
+    'table.roll td.where.sea { font-weight: 700; }' +
     'table.roll tr.exempt td { background: #ececec; color: #888; }' +
     'table.roll td.exemptbox { text-align: center; font-style: italic; color: #777; letter-spacing: 1px; }' +
     '.sig { margin-top: 10mm; font-size: 9pt; }' +
@@ -448,6 +451,30 @@ function erShortSession(label) {
 }
 
 /* 1. Seat grid: rows across the page, seats down, A4 landscape. */
+/* A name in a grid box: shrink to fit, but never below a readable minimum.
+   Names that would need to be smaller wrap onto two lines instead
+   (breaking after hyphens and spaces first). */
+var ER_MIN_PT = 6;
+function erPt(style) { var m = /font-size:([0-9.]+)pt/.exec(style); return m ? Number(m[1]) : null; }
+function erGridName(text, cls, basePt, avail, bold, upper) {
+  var style = fitStyle(text, basePt, avail, bold, upper, ER_FONT), pt = erPt(style);
+  if (pt === null || pt >= ER_MIN_PT) return '<span class="' + cls + '"' + style + '>' + erEsc(text) + '</span>';
+  // Too long for one line at a readable size: split into two lines at the
+  // hyphen or space that best balances them, each line shrunk to fit.
+  var s = String(text), best = null;
+  for (var i = 1; i < s.length; i++) {
+    if (s[i - 1] !== '-' && s[i - 1] !== ' ') continue;
+    var a = s.slice(0, i).replace(/ $/, ''), b = s.slice(i);
+    var size = Math.min(erPt(fitStyle(a, basePt, avail, bold, upper, ER_FONT)) || basePt, erPt(fitStyle(b, basePt, avail, bold, upper, ER_FONT)) || basePt);
+    if (!best || size > best.size) best = { a: a, b: b, size: size };
+  }
+  var two = best ? erEsc(best.a) + '<br>' + erEsc(best.b) : erEsc(s);
+  var size2 = best ? Math.max(ER_MIN_PT, Math.floor(best.size * 10) / 10) : ER_MIN_PT;
+  // If even two lines need less than the minimum, keep the minimum and let
+  // the line wrap anywhere rather than print something nobody can read.
+  return '<span class="' + cls + '" style="font-size:' + size2 + 'pt;white-space:normal;overflow-wrap:anywhere;line-height:1.05">' + two + '</span>';
+}
+
 function erDocSeatGrid(st, model) {
   var r = st.room, rows = Number(r.rows), per = Number(r.seatsPerRow);
   var grid = {};
@@ -460,8 +487,7 @@ function erDocSeatGrid(st, model) {
     t += '<tr><th class="rowhead">Seat ' + seat + '</th>';
     for (var row2 = 1; row2 <= rows; row2++) {
       var s = grid[row2 + '_' + seat];
-      t += '<td>' + (s ? '<span class="f"' + fitStyle(s.first, 6, avail, false, false, ER_FONT) + '>' + erEsc(s.first) + '</span>' +
-        '<span class="l"' + fitStyle(s.last, 6.8, avail, true, true, ER_FONT) + '>' + erEsc(s.last) + '</span>' : '') + '</td>';
+      t += '<td>' + (s ? erGridName(s.first, 'f', 6, avail, false, false) + erGridName(s.last, 'l', 6.8, avail, true, true) : '') + '</td>';
     }
     t += '</tr>';
   }
@@ -510,22 +536,33 @@ function erDocExempt(st, model) {
   return erDoc('Exempt list', erHeader(st, 'Exempt Students') + t, true);
 }
 
+/* Where a student sits, for the roll: "BSSC Gym R3 S7", "SEA Room", or "Exempt". */
+function erWhere(st, model, id) {
+  if (model.exempt[id]) return 'Exempt';
+  var p = model.seats[id];
+  if (p) return (st.room.name || 'Exam room') + ' R' + p.row + ' S' + p.seat;
+  if (model.provision[id] !== undefined) return 'SEA Room';
+  return 'Not seated';
+}
+
 function erRollPage(st, model, code) {
   var cls = model.classes[code] || {};
   var sessions = (st.details.sessions || []).filter(function (x) { return x.label; });
   if (!sessions.length) sessions = [{ label: 'Exam' }];
   var list = (cls.studentIds || []).map(function (id) { return model.students[id]; }).filter(Boolean).sort(erCompareNames);
   var t = '<div class="page"><div class="teacher">' + erEsc(cls.teacher || '') + '</div>' + erHeader(st, 'Exam Roll ' + code) +
-    '<table class="list roll"><thead><tr><th style="width:9mm">#</th><th>First name</th><th>Last name</th>' +
+    '<table class="list roll"><thead><tr><th style="width:9mm">#</th><th>First name</th><th>Last name</th><th style="width:34mm">Room / Seat</th>' +
     sessions.map(function (x) { return '<th style="width:26mm;text-align:center">' + erEsc(erShortSession(x.label)) + '</th>'; }).join('') +
     '</tr></thead><tbody>';
   list.forEach(function (s, i) {
     var ex = model.exempt[s.id];
+    var where = erWhere(st, model, s.id);
     t += '<tr' + (ex ? ' class="exempt"' : '') + '><td>' + (i + 1) + '</td>' + erNameCells(s) +
+      '<td class="where' + (where === 'SEA Room' ? ' sea' : '') + '">' + erEsc(ex ? '' : where) + '</td>' +
       (ex ? '<td class="exemptbox" colspan="' + sessions.length + '">' + erEsc('<Exempt>') + '</td>'
           : sessions.map(function () { return '<td class="box">&#9744;</td>'; }).join('')) + '</tr>';
   });
-  if (!list.length) t += '<tr><td colspan="' + (3 + sessions.length) + '">No students found in this class.</td></tr>';
+  if (!list.length) t += '<tr><td colspan="' + (4 + sessions.length) + '">No students found in this class.</td></tr>';
   t += '</tbody></table><div class="sig">' + sessions.map(function (x) {
     return '<div>Supervisor signature \u2014 ' + erEsc(erShortSession(x.label)) + '</div>';
   }).join('') + '</div></div>';
@@ -608,6 +645,8 @@ var ER = {
   anchor: null,         // last student picked, for Shift-click ranges
   undo: [],             // seating-chart history: [{ label, state }], newest last
   roomSnap: null,       // chart state when a room-size box gained focus
+  savedSnap: null,      // ER.S as last saved or opened (to spot unsaved changes)
+  dupAsk: false,        // showing the Duplicate exam choice
   notice: '',           // message shown at the top of the current step
   root: null
 };
@@ -879,13 +918,16 @@ function erSaveState() {
    from Compass. Seating starts fresh (fixed seats and moves are cleared), and
    so do the lists that belong to one exam. Seats can be brought back from any
    saved exam with "Copy seating from a saved exam" (erCopySeatingFrom). */
-function erDuplicate() {
+function erDuplicate(keepSeating) {
+  var seatsNow = keepSeating ? erBuildModel().seats : null;
   var S = JSON.parse(JSON.stringify(ER.S));
   S.details.exam = S.details.exam ? S.details.exam + ' (copy)' : '';
   S.exemptText = ''; S.seaRows = []; S.seaStay = {}; S.matchChoice = {}; S.roster = {}; S.spareOverflow = false;
-  S.pins = {};                       // a new exam starts with fresh seating
+  S.pins = {};                       // a new exam starts with fresh seating...
+  if (seatsNow) Object.keys(seatsNow).forEach(function (id) { S.pins[id] = { row: seatsNow[id].row, seat: seatsNow[id].seat }; });   // ...unless asked to keep it
   ER.S = S; ER.seaText = ''; ER.selection = []; ER.anchor = null; ER.undo = []; ER.step = 0;
-  ER.notice = 'This is a copy for a new exam, with fresh seating. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
+  ER.notice = 'This is a copy for a new exam, ' + (seatsNow ? 'with the same seating (everyone is fixed in their seat)' : 'with fresh seating') +
+    '. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
     'and click "Get students from Compass". Then paste the new exempt and SEA lists. To reuse the seats from an earlier exam, ' +
     'use "Copy seating from a saved exam" on the Seating chart. Save it when you are ready.';
 }
@@ -949,10 +991,20 @@ function erCopySeatingFrom(text) {
   erRender();
 }
 
+/* Unsaved changes: anything in the exam's settings, lists or seating that
+   differs from the last save (or open). Compass data itself isn't counted. */
+function erDirty() {
+  var now = JSON.stringify(ER.S);
+  if (ER.savedSnap === null) ER.savedSnap = JSON.stringify(erNewState());
+  return now !== ER.savedSnap;
+}
+function erMarkSaved() { ER.savedSnap = JSON.stringify(ER.S); }
+
 function erSaveSession() {
   var model = erBuildModel();
   var file = erPlanFile(ER.S, model, erSaveState());
   erDownload(erFileName(ER.S, 'Exam Rooms session', 'json'), JSON.stringify(file, null, 1), 'application/json');
+  erMarkSaved();
   ER.notice = 'Saved. The file has student names: keep it somewhere private. Open it again with "Open saved file" (or in the Exam Seating Manager).';
   erRender();
 }
@@ -981,6 +1033,7 @@ async function erOpenText(text) {
   var old = f.examRooms.roster || {};
   ER.S = Object.assign(erNewState(), f.examRooms);
   ER.undo = []; ER.selection = []; ER.anchor = null;
+  erMarkSaved();
   ER.seaText = erSeaRowsToText(ER.S.seaRows);
   ER.step = 6;
   ER.notice = 'Reading the latest class lists from Compass\u2026';
@@ -1066,6 +1119,7 @@ var ER_CSS =
   '#er-root .er-grid td.pin{box-shadow:inset 0 0 0 2px #0d5c2e}' +
   '#er-root .er-grid td.sel{background:#fde68a}' +
   '#er-root .er-grid td.over{background:#bbf7d0}' +
+  '#er-root .er-unsaved{margin-left:auto;margin-right:8px;font-size:12px;font-weight:700;color:#b45309;align-self:center}' +
   '#er-root .er-grid td b{display:block;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px}' +
   '#er-root .er-grid td span{display:block;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px}';
 
@@ -1315,12 +1369,20 @@ function erRenderNow() {
   var model = erBuildModel();
   var body = [erStepExam, erStepClasses, erStepExemptions, erStepSEA, erStepPins, erStepNames, erStepChart, erStepDocs][ER.step](model);
   var keepScroll = root.querySelector('.er-body') ? root.querySelector('.er-body').scrollTop : 0;
+  var dirty = erDirty();
+  var dup = ER.dupAsk ? '<div class="er-warn" data-dupask="1"><b>Duplicate exam:</b> start the next exam from a copy of this one ' +
+      '(details, sessions, room, groups, gaps and name fixes are copied; the exempt and SEA lists start empty).' +
+      (dirty ? ' <b>This exam has unsaved changes</b>: Save session file first if you want to keep it.' : '') +
+      '<br><button class="er-btn pri" data-act="dupFresh">Fresh seating (recommended)</button> ' +
+      '<button class="er-btn" data-act="dupKeep">Keep this exam\'s seating</button> ' +
+      '<button class="er-btn" data-act="dupCancel">Cancel</button></div>' : '';
   root.innerHTML = '<div class="er-card"><div class="er-head"><strong>Exam Rooms</strong>' +
-    '<button class="er-btn" data-act="open">Open saved file</button><button class="er-btn" data-act="save">Save session file</button>' +
+    (dirty ? '<span class="er-unsaved" data-unsaved="1">Unsaved changes</span>' : '') +
+    '<button class="er-btn" data-act="open">Open saved file</button><button class="er-btn' + (dirty ? ' pri' : '') + '" data-act="save">Save session file</button>' +
     '<button class="er-btn" data-act="duplicate" title="Start the next exam from a copy of this one">Duplicate exam</button>' +
     '<button class="er-btn" data-act="close" aria-label="Close">Close</button></div>' +
     '<div class="er-steps">' + ER_STEPS.map(function (s, i) { return '<button data-act="go" data-i="' + i + '" class="' + (i === ER.step ? 'on' : '') + '">' + (i + 1) + '. ' + erEsc(s) + '</button>'; }).join('') + '</div>' +
-    '<div class="er-body">' + (ER.notice ? '<div class="er-note">' + erEsc(ER.notice) + '</div>' : '') + '<h2 style="margin:0 0 6px;font-size:18px">' + erEsc(ER_STEPS[ER.step]) + '</h2>' + body + '</div>' +
+    '<div class="er-body">' + dup + (ER.notice ? '<div class="er-note">' + erEsc(ER.notice) + '</div>' : '') + '<h2 style="margin:0 0 6px;font-size:18px">' + erEsc(ER_STEPS[ER.step]) + '</h2>' + body + '</div>' +
     '<div class="er-foot"><button class="er-btn" data-act="back"' + (ER.step === 0 ? ' disabled' : '') + '>Back</button>' +
     '<button class="er-btn pri" data-act="next"' + (ER.step === ER_STEPS.length - 1 ? ' disabled' : '') + '>Next</button></div></div>';
   root.querySelector('.er-body').scrollTop = keepScroll;
@@ -1481,14 +1543,9 @@ function erHandle(e) {
     else if (act === 'undo') { erUndo(); return; }
     else if (act === 'copySeating') { erPickSeatingFile(); return; }
     else if (act === 'save') { erSaveSession(); return; }
-    else if (act === 'duplicate') {
-      if (!window.confirm('Start a new exam from a copy of this one?\n\n' +
-          'Copied: exam details, sessions, room, groups and gaps, and name fixes.\n' +
-          'Starts fresh: the seating (fixed seats and moves), and the exempt and SEA lists.\n' +
-          'To reuse seats from an earlier exam, use "Copy seating from a saved exam" on the Seating chart.\n\n' +
-          'This exam is not kept unless you have saved it (Save session file).')) return;
-      erDuplicate();
-    }
+    else if (act === 'duplicate') ER.dupAsk = true;
+    else if (act === 'dupCancel') ER.dupAsk = false;
+    else if (act === 'dupFresh' || act === 'dupKeep') { ER.dupAsk = false; erDuplicate(act === 'dupKeep'); }
     else if (act === 'open') { erOpenSession(); return; }
     else if (act === 'print') {
       var d = erDocsFor(erBuildModel()).filter(function (x) { return x.key === t.getAttribute('data-doc'); })[0];
@@ -1571,6 +1628,9 @@ function erStart() {
   root.addEventListener('click', erHandle);
   root.addEventListener('input', erInput);
   root.addEventListener('change', erInput);
+  window.addEventListener('beforeunload', function (e) {
+    if (ER.root && erDirty()) { e.preventDefault(); e.returnValue = ''; return ''; }
+  });
   document.addEventListener('keydown', function (e) {
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing &&
