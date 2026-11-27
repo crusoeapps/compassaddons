@@ -294,15 +294,78 @@ function erSaveState() {
 }
 
 /* Start the next exam from a copy of this one. Keeps the setup (details,
-   sessions, room, groups, gaps, fixed seats, name fixes) and the class lists
-   already read from Compass; clears the lists that belong to one exam. */
+   sessions, room, groups, gaps, name fixes) and the class lists already read
+   from Compass. Seating starts fresh (fixed seats and moves are cleared), and
+   so do the lists that belong to one exam. Seats can be brought back from any
+   saved exam with "Copy seating from a saved exam" (erCopySeatingFrom). */
 function erDuplicate() {
   var S = JSON.parse(JSON.stringify(ER.S));
   S.details.exam = S.details.exam ? S.details.exam + ' (copy)' : '';
   S.exemptText = ''; S.seaRows = []; S.seaStay = {}; S.matchChoice = {}; S.roster = {}; S.spareOverflow = false;
+  S.pins = {};                       // a new exam starts with fresh seating
   ER.S = S; ER.seaText = ''; ER.selection = []; ER.anchor = null; ER.undo = []; ER.step = 0;
-  ER.notice = 'This is a copy for a new exam. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
-    'and click "Get students from Compass". Then paste the new exempt and SEA lists. Save it when you are ready.';
+  ER.notice = 'This is a copy for a new exam, with fresh seating. Change the exam name and sessions here. On Classes, change the class codes if they differ ' +
+    'and click "Get students from Compass". Then paste the new exempt and SEA lists. To reuse the seats from an earlier exam, ' +
+    'use "Copy seating from a saved exam" on the Seating chart. Save it when you are ready.';
+}
+
+/* Copy seating from a saved exam file: every student in this exam who has a
+   seat in that file is put back in the same seat (as a fixed seat); everyone
+   else is seated in the free seats. The room size comes from that file too.
+   Undoable. Students are matched by their Compass ID, so names never matter. */
+function erPickSeatingFile() {
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = function () {
+    var f = inp.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () { erCopySeatingFrom(String(reader.result)); };
+    reader.onerror = function () { ER.notice = 'Could not read that file. Try again.'; erRender(); };
+    reader.readAsText(f);
+  };
+  inp.click();
+}
+function erCopySeatingFrom(text) {
+  var f;
+  try { f = JSON.parse(text); } catch (e) { f = null; }
+  var sess = f && f.app === 'Exam Seating Manager' && f.sessions && f.sessions[0];
+  if (!sess || !Array.isArray(sess.students) || !Array.isArray(sess.rooms)) {
+    ER.notice = 'That file is not a saved exam, so no seating was copied. Choose a file saved with "Save session file".';
+    erRender(); return;
+  }
+  var main = sess.rooms.filter(function (r) { return r.purpose === 'main' || r.kind === 'seated'; })[0];
+  if (!main) { ER.notice = 'That saved exam has no seating room, so no seating was copied.'; erRender(); return; }
+  var saved = {};
+  sess.students.forEach(function (st) { if (st.roomId === main.id && st.row && st.seat) saved[st.id] = { row: Number(st.row), seat: Number(st.seat) }; });
+  var model = erBuildModel();
+  var here = Object.keys(model.groupOf).filter(function (id) {
+    return !model.exempt[id] && !(model.provision[id] !== undefined && !ER.S.seaStay[id]);
+  });
+  var matched = here.filter(function (id) { return saved[id]; });
+  if (!matched.length) {
+    ER.notice = 'None of the students seated in "' + (sess.name || 'that exam') + '" are in this exam, so no seating was copied.';
+    erRender(); return;
+  }
+  erRememberChart('copying seating from ' + (sess.name || 'a saved exam'));
+  var r = (f.examRooms && f.examRooms.room) || { rows: main.rows, seatsPerRow: main.seatsPerRow, use: main.seatsPerRow };
+  ER.S.room.rows = Math.max(1, Math.min(60, Number(r.rows) || ER.S.room.rows));
+  ER.S.room.seatsPerRow = Math.max(1, Math.min(60, Number(r.seatsPerRow) || ER.S.room.seatsPerRow));
+  ER.S.room.use = Math.max(1, Math.min(ER.S.room.seatsPerRow, Number(r.use) || ER.S.room.seatsPerRow));
+  var outside = 0;
+  ER.S.pins = {};
+  matched.forEach(function (id) {
+    var p = saved[id];
+    if (p.row > ER.S.room.rows || p.seat > ER.S.room.seatsPerRow) { outside++; return; }
+    ER.S.pins[id] = { row: p.row, seat: p.seat };
+  });
+  var fresh = here.length - matched.length;
+  ER.selection = []; ER.anchor = null;
+  ER.notice = 'Copied the seats of ' + (matched.length - outside) + ' student' + (matched.length - outside === 1 ? '' : 's') + ' from "' + (sess.name || 'the saved exam') + '"' +
+    ', and its room size.' + (fresh ? ' ' + fresh + ' student' + (fresh === 1 ? ' who was' : 's who were') + ' not in that exam ' + (fresh === 1 ? 'has' : 'have') + ' been seated in the free seats.' : '') +
+    (outside ? ' ' + outside + ' seat' + (outside === 1 ? ' was' : 's were') + ' outside this room and left to be filled.' : '') +
+    ' Check the chart; Undo puts it back.';
+  erRender();
 }
 
 function erSaveSession() {
@@ -550,7 +613,8 @@ function erStepPins() {
       (p.back ? 'Back of their row' : 'Row ' + erEsc(p.row) + ' Seat ' + erEsc(p.seat)) + '</td><td><button class="er-btn" data-act="delPin" data-id="' + erEsc(id) + '">Remove</button></td></tr>';
   });
   if (!ids.length) h += '<tr><td colspan="3" class="er-muted">No fixed seats.</td></tr>';
-  h += '</table><div class="er-row"><div><label>Student</label><select id="er-pin-who">' + erStudentOptions('') + '</select></div>' +
+  h += '</table>' + (ids.length ? '<p><button class="er-btn" data-act="clearPins">Clear all ' + ids.length + ' fixed seat' + (ids.length === 1 ? '' : 's') + '</button> ' +
+    '<span class="er-muted">Everyone goes back to normal seating. Undo is on the Seating chart.</span></p>' : '') + '<div class="er-row"><div><label>Student</label><select id="er-pin-who">' + erStudentOptions('') + '</select></div>' +
     '<div><label>Where</label><select id="er-pin-kind"><option value="seat">A particular seat</option><option value="back">Back of their row</option></select></div>' +
     '<div><label>Row</label><input id="er-pin-row" type="number" min="1" style="width:70px"></div>' +
     '<div><label>Seat</label><input id="er-pin-seat" type="number" min="1" style="width:70px"></div>' +
@@ -594,7 +658,11 @@ function erStepChart(model) {
   var lastUndo = ER.undo[ER.undo.length - 1];
   h += '<p><button class="er-btn" data-act="undo"' + (lastUndo ? ' title="Undo ' + erEsc(lastUndo.label) + ' (Ctrl+Z)"' : ' disabled') + '>&#8630; Undo' +
     (lastUndo ? ' ' + erEsc(lastUndo.label) : '') + '</button> <span class="er-muted">' +
-    (ER.undo.length ? ER.undo.length + ' change' + (ER.undo.length === 1 ? '' : 's') + ' can be undone (Ctrl+Z / Cmd+Z)' : 'Nothing to undo yet') + '</span></p>';
+    (ER.undo.length ? ER.undo.length + ' change' + (ER.undo.length === 1 ? '' : 's') + ' can be undone (Ctrl+Z / Cmd+Z)' : 'Nothing to undo yet') + '</span></p>' +
+    '<p><button class="er-btn" data-act="copySeating" title="Use the seats from an exam you saved with Save session file">Copy seating from a saved exam&hellip;</button> ' +
+    '<span class="er-muted">Seating starts fresh for each exam. This puts every student who sat that exam back in the same seat.</span></p>' +
+    (Object.keys(S.pins).length ? '<p><button class="er-btn" data-act="clearPins">Clear all fixed seats (' + Object.keys(S.pins).length + ')</button> ' +
+      '<span class="er-muted">Fixed seats have a green outline. Clearing puts everyone back in normal seating; Undo puts them back.</span></p>' : '');
   h += '<div class="er-row" data-roomsize="1">' +
     '<div><label>Rows</label>' + erIn('room.rows', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
     '<div><label>Seats per row</label>' + erIn('room.seatsPerRow', ' type="number" min="1" max="60" style="width:70px"') + '</div>' +
@@ -602,7 +670,9 @@ function erStepChart(model) {
     '<p class="er-muted">Change the room size here and the chart redraws straight away. Saving and the documents always use the chart exactly as it is shown.</p>';
   if (ER.selection.length) {
     h += '<div class="er-warn" data-selbar="1"><b>' + ER.selection.length + ' picked.</b> Click a seat to move ' + (ER.selection.length === 1 ? 'them' : 'them there together (the group keeps its shape)') +
-      ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button></div>';
+      ', or drag one of them. <button class="er-btn" data-act="clearSel">Clear selection</button>' +
+      (function () { var k = ER.selection.filter(function (x) { return S.pins[x]; }).length;
+        return k ? ' <button class="er-btn" data-act="unpinSel">Unfix picked (' + k + ')</button>' : ''; })() + '</div>';
   }
   h += '<p><b>Pick several students:</b> Ctrl-click (Cmd-click on a Mac) to add or remove one, or Shift-click to pick everyone in a block. ' +
     'Then click a seat, or drag one of them, to move them all together. Anyone in the way swaps into the seats they left.</p>';
@@ -788,7 +858,28 @@ function erHandle(e) {
     else if (act === 'upGroup') { var g = S.groups.splice(i, 1)[0]; S.groups.splice(i - 1, 0, g); }
     else if (act === 'loadAll') { erLoadAll(); return; }
     else if (act === 'retry') { erLoadClass(t.getAttribute('data-code')); return; }
-    else if (act === 'delPin') delete S.pins[t.getAttribute('data-id')];
+    else if (act === 'delPin') {
+      var pid = t.getAttribute('data-id'), pst = ER.data.students[pid];
+      erRememberChart('removing the fixed seat for ' + (pst ? pst.first + ' ' + pst.compassLast : 'a student'));
+      delete S.pins[pid];
+    }
+    else if (act === 'clearPins') {
+      var n = Object.keys(S.pins).length;
+      if (n) {
+        erRememberChart('clearing ' + n + ' fixed seat' + (n === 1 ? '' : 's'));
+        S.pins = {}; ER.selection = []; ER.anchor = null;
+        ER.notice = 'Cleared ' + n + ' fixed seat' + (n === 1 ? '' : 's') + '. Everyone is back in normal seating. Undo on the Seating chart puts them back.';
+      }
+    }
+    else if (act === 'unpinSel') {
+      var un = ER.selection.filter(function (x) { return S.pins[x]; });
+      if (un.length) {
+        erRememberChart('unfixing ' + un.length + ' student' + (un.length === 1 ? '' : 's'));
+        un.forEach(function (x) { delete S.pins[x]; });
+        ER.notice = 'Unfixed ' + un.length + ' student' + (un.length === 1 ? '' : 's') + ': they are back in normal seating.';
+      }
+      ER.selection = []; ER.anchor = null;
+    }
     else if (act === 'addPin') {
       var who = ER.root.querySelector('#er-pin-who').value, kind = ER.root.querySelector('#er-pin-kind').value;
       var row = parseInt(ER.root.querySelector('#er-pin-row').value, 10), seat = parseInt(ER.root.querySelector('#er-pin-seat').value, 10);
@@ -807,11 +898,13 @@ function erHandle(e) {
     else if (act === 'fitGaps') { erRememberChart('one-seat gaps between groups'); S.groups.forEach(function (g) { g.gap = 'seat'; }); }
     else if (act === 'fitSpare') { erRememberChart('using the spare seats'); S.spareOverflow = true; }
     else if (act === 'undo') { erUndo(); return; }
+    else if (act === 'copySeating') { erPickSeatingFile(); return; }
     else if (act === 'save') { erSaveSession(); return; }
     else if (act === 'duplicate') {
       if (!window.confirm('Start a new exam from a copy of this one?\n\n' +
-          'Copied: exam details, sessions, room, groups and gaps, fixed seats and name fixes.\n' +
-          'Cleared: the exempt and SEA lists.\n\n' +
+          'Copied: exam details, sessions, room, groups and gaps, and name fixes.\n' +
+          'Starts fresh: the seating (fixed seats and moves), and the exempt and SEA lists.\n' +
+          'To reuse seats from an earlier exam, use "Copy seating from a saved exam" on the Seating chart.\n\n' +
           'This exam is not kept unless you have saved it (Save session file).')) return;
       erDuplicate();
     }

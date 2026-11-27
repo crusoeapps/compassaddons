@@ -528,6 +528,10 @@ with sync_playwright() as pw:
 
     check("only Compass was contacted", external == [], external[:5])
     # ---- duplicate exam ----
+    saved_plan = pg.evaluate("() => window.__examRooms.plan()")     # this exam, as "Save session file" would save it
+    saved_path = os.path.join(tempfile.mkdtemp(), "earlier-exam.json"); json.dump(saved_plan, open(saved_path, "w"))
+    main_id = [r["id"] for r in saved_plan["sessions"][0]["rooms"] if r["purpose"] == "main"][0]
+    saved_seats = {st["id"]: {"row": st["row"], "seat": st["seat"]} for st in saved_plan["sessions"][0]["students"] if st["roomId"] == main_id and st["row"]}
     before = S()
     pg.once("dialog", lambda d: d.dismiss())
     pg.click("#er-root [data-act='duplicate']")
@@ -536,13 +540,80 @@ with sync_playwright() as pw:
     pg.click("#er-root [data-act='duplicate']")
     dup = S()
     check("duplicate copies the setup", dup["room"] == before["room"] and dup["groups"] == before["groups"] and
-          dup["details"]["sessions"] == before["details"]["sessions"] and dup["pins"] == before["pins"] and dup["overrides"] == before["overrides"])
+          dup["details"]["sessions"] == before["details"]["sessions"] and dup["overrides"] == before["overrides"])
+    check("a new exam starts with fresh seating (no fixed seats or moves)", dup["pins"] == {} and before["pins"] != {}, dup["pins"])
+    check("...so the moved student is back in normal seating", M2().get(b_id) != {"row": 1, "seat": 18}, M2().get(b_id))
     check("duplicate marks the new exam as a copy", dup["details"]["exam"] == before["details"]["exam"] + " (copy)", dup["details"]["exam"])
     check("duplicate clears the exempt and SEA lists", dup["exemptText"] == "" and dup["seaRows"] == [] and dup["seaStay"] == {} and dup["matchChoice"] == {})
     check("duplicate starts with an empty undo history", pg.evaluate("() => window.__examRooms.ER.undo.length") == 0)
     check("duplicate goes back to step 1 with instructions", pg.evaluate("() => window.__examRooms.ER.step") == 0 and "copy for a new exam" in pg.inner_text("#er-root .er-note"))
     check("the copy seats everyone again without reloading Compass",
           pg.evaluate("() => { var m = window.__examRooms.model(); return Object.keys(m.seats).length > 0 && m.classProblems.length === 0 && Object.keys(m.exempt).length === 0; }"))
+
+    # ---- copy seating from a saved exam ----
+    pg.click("#er-root [data-act='go'][data-i='6']")
+    fresh_seats = M2()
+    with pg.expect_file_chooser() as fc:
+        pg.click("#er-root [data-act='copySeating']")
+    fc.value.set_files(saved_path)
+    pg.wait_for_function("() => /Copied the seats of/.test(document.querySelector('#er-root .er-note') ? document.querySelector('#er-root .er-note').textContent : '')", timeout=10000)
+    cp = M2()
+    same = [i for i in saved_seats if i in cp]
+    check("copy seating puts everyone who sat that exam back in the same seat", same and all(cp[i] == saved_seats[i] for i in same),
+          [(i, cp[i], saved_seats[i]) for i in same if cp[i] != saved_seats[i]][:3])
+    check("...including the moved student", cp.get(b_id) == {"row": 1, "seat": 18}, cp.get(b_id))
+    newcomers = [i for i in cp if i not in saved_seats]
+    note = pg.inner_text("#er-root .er-note")
+    check("students who weren't in that exam are seated in the free seats", newcomers and str(len(newcomers)) + " students who were not in that exam" in note, note)
+    check("nobody shares a seat after copying", len({(p_["row"], p_["seat"]) for p_ in cp.values()}) == len(cp))
+    check("copied seats are kept as fixed seats", all(S()["pins"].get(i) == saved_seats[i] for i in same))
+    pg.click("#er-root [data-act='undo']")
+    check("Undo reverses copying the seating", M2() == fresh_seats and S()["pins"] == {})
+    odd = json.loads(json.dumps(saved_plan))
+    moved_out = [st for st in odd["sessions"][0]["students"] if st["roomId"] == main_id and st["row"]][0]
+    moved_out["seat"] = 25
+    odd_path = os.path.join(tempfile.mkdtemp(), "odd.json"); json.dump(odd, open(odd_path, "w"))
+    with pg.expect_file_chooser() as fc:
+        pg.click("#er-root [data-act='copySeating']")
+    fc.value.set_files(odd_path)
+    pg.wait_for_function("() => /Copied the seats of/.test(document.querySelector('#er-root .er-note').textContent)", timeout=10000)
+    check("a saved seat outside this room is reported and left to be filled", "1 seat was outside this room" in pg.inner_text("#er-root .er-note")
+          and moved_out["id"] not in S()["pins"])
+    bad_path = os.path.join(tempfile.mkdtemp(), "bad.json"); open(bad_path, "w").write('{"hello": 1}')
+    pins_before = S()["pins"]
+    with pg.expect_file_chooser() as fc:
+        pg.click("#er-root [data-act='copySeating']")
+    fc.value.set_files(bad_path)
+    pg.wait_for_function("() => /not a saved exam/.test(document.querySelector('#er-root .er-note').textContent)", timeout=10000)
+    check("a file that isn't a saved exam changes nothing", S()["pins"] == pins_before)
+
+    # ---- clearing fixed seats ----
+    pins0 = S()["pins"]; n0 = len(pins0)
+    check("chart offers Clear all fixed seats with the count", ("Clear all fixed seats (%d)" % n0) in pg.inner_text("#er-root .er-body"), n0)
+    two = [i for i in list(pins0)[:2]]
+    for i in two:
+        p_ = M2()[i]; pg.click(cell(p_["row"], p_["seat"]), modifiers=["Control"])
+    check("picking fixed students offers Unfix picked", "Unfix picked (2)" in pg.inner_text("#er-root [data-selbar]"))
+    pg.click("#er-root [data-act='unpinSel']")
+    check("Unfix picked removes just those fixed seats", all(i not in S()["pins"] for i in two) and len(S()["pins"]) == n0 - 2)
+    pg.click("#er-root [data-act='undo']")
+    check("...and Undo puts them back", S()["pins"] == pins0)
+    pg.locator("#er-root .er-body [data-act='clearPins']").click()
+    cleared = M2()
+    check("Clear all fixed seats empties them and reseats everyone normally", S()["pins"] == {} and len({(q["row"], q["seat"]) for q in cleared.values()}) == len(cleared)
+          and "Cleared %d fixed seat" % n0 in pg.inner_text("#er-root .er-note"))
+    check("the chart no longer offers Clear all", pg.locator("#er-root .er-body [data-act='clearPins']").count() == 0)
+    pg.click("#er-root [data-act='undo']")
+    check("Undo restores every fixed seat", S()["pins"] == pins0)
+    pg.click("#er-root [data-act='go'][data-i='4']")
+    check("Fixed seats step offers Clear all with the count", ("Clear all %d fixed seats" % n0) in pg.inner_text("#er-root .er-body"))
+    pg.locator("#er-root [data-act='delPin']").first.click()
+    check("Remove on one fixed seat can be undone too", len(S()["pins"]) == n0 - 1 and
+          pg.evaluate("() => window.__examRooms.ER.undo[window.__examRooms.ER.undo.length - 1].label").startswith("removing the fixed seat for"))
+    pg.click("#er-root [data-act='clearPins']")
+    check("Clear all on the Fixed seats step works", S()["pins"] == {} and "No fixed seats" in pg.inner_text("#er-root .er-body"))
+    pg.click("#er-root [data-act='go'][data-i='6']"); pg.click("#er-root [data-act='undo']")
+    check("...and is undone from the chart", len(S()["pins"]) == n0 - 1)
 
     check("no JavaScript errors", errors == [], errors[:3])
     browser.close()
